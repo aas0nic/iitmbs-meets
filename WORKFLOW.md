@@ -141,12 +141,13 @@ The Management role provides central administration across 4 core views:
 | :--- | :---: | :---: | :---: |
 | **Authenticate via Google OAuth / Institutional Email** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **View All Approved & Completed Meetups** | ✅ Global | ✅ All | ✅ All |
-| **Initiate New Meetup Proposal** | ❌ No | 👁️ Co-propose / View | ✅ **Full Authority** |
-| **Select & Invite Peer LHCs** | ❌ N/A | ❌ N/A | ✅ **Same Region Only** |
-| **Accept or Decline Co-host Invitation** | ❌ N/A | ❌ N/A | ✅ **If Invited** |
+| **Initiate New Meetup Proposal** | ❌ No | ✅ **Any region** | ✅ **Own region** |
+| **Invite Co-hosts** | ❌ N/A | ✅ **Other UHC members** | ✅ **Same-region LHCs** |
+| **Accept or Decline Co-host Invitation** | ❌ N/A | ✅ **If Invited** | ✅ **If Invited** |
 | **Approve / Reject Meetup Proposals** | ✅ **Sole Authority** | ❌ No | ❌ No |
 | **Mark Approved Meetup as Completed** | ✅ **Yes** | 👁️ House level | 👁️ Proposer |
-| **Submit Post-Meetup Reimbursement Claim** | ❌ N/A | ❌ N/A | ✅ **Completed Meetups** |
+| **Submit Post-Meetup Reimbursement Claim** | ❌ N/A | ✅ **Own meetups** | ✅ **Own meetups** |
+| **Save default payout (bank) details** | ❌ N/A | ✅ Yes | ✅ Yes |
 | **Audit & Approve Reimbursement Claims** | ✅ **Sole Authority** | 👁️ Read-only | ❌ No |
 | **Mark Reimbursement In-Progress (Accounts)** | ✅ **Yes** | ❌ No | ❌ No |
 | **View Overall Stats (12 Houses & 10 Regions)** | ✅ **Global Analytics** | ✅ House Analytics | 👁️ Regional |
@@ -241,7 +242,8 @@ All transitions are enforced server-side in `portal/api/meetups.py` (`permission
    - All meetups are **offline / in person**; a physical venue address is mandatory.
    - Date, Start Time, and End Time.
    - Exact venue address.
-   - Target student capacity and estimated budget (if any).
+   - Preferred date plus an optional backup date.
+   - Expected attendance. Budget = ₹200 per expected attendee, plus optional extra budget (with a reason) for large meetups, e.g. venue booking.
 3. **Dynamic Regional Peer Discovery**:
    - The system automatically detects the proposer’s assigned Region.
    - It queries all LHCs in that specific region and presents them with:
@@ -299,7 +301,7 @@ erDiagram
     HOUSES { int id PK; text slug UK; text name; text motto; text color }
     REGIONS { int id PK; text code UK; text name; text states }
     USERS { text id PK; text name; text email UK; text role "MANAGEMENT|UHC|LHC"; text title; int house_id FK; int region_id FK; text roll_number UK }
-    MEETUPS { int id PK; text title; text description; text category; text proposer_id FK; int house_id FK; int region_id FK; text event_date; text start_time; text end_time; text venue "required, offline only"; int expected_attendees; int budget_requested; text budget_breakdown; text status; text review_comments; text reviewed_by FK; text reviewed_at; text submitted_at; text completed_at }
+    MEETUPS { int id PK; text title; text description; text category; text proposer_id FK; int house_id FK; int region_id FK; text event_date "preferred, then approved"; text backup_date; text start_time; text end_time; text venue "required, offline only"; int expected_attendees; int budget_per_head; int extra_budget; text extra_budget_note; int budget_requested; text status; text review_comments; text reviewed_by FK; text reviewed_at; text submitted_at; text completed_at }
     MEETUP_INVITATIONS { int id PK; int meetup_id FK; text invitee_id FK; text status "INVITED|ACCEPTED|DECLINED"; text response_note; text responded_at }
     MEETUP_ACTIVITY { int id PK; int meetup_id FK; text actor_id FK; text action; text note; text created_at }
     CLAIMS { int id PK; int meetup_id FK_UK; text claimant_id FK; int amount_claimed; int amount_approved; int actual_attendance; text attendance_notes; text expense_notes; text payout_details; text status "PENDING_REVIEW|IN_PROGRESS|APPROVED|REJECTED"; text review_notes }
@@ -328,19 +330,28 @@ Identity comes from a signed session cookie — **no endpoint accepts a user id 
 ### Meetups
 * `GET /api/meetups` — filters: `status` (comma list), `house_id`, `region_id`, `category`, `mine=1`, `invited=1`, `when=upcoming|past`, `q`, `sort=date_asc|submitted`. Results are limited to what the user may see.
 * `GET /api/meetups/<id>` → `{meetup, invitations, my_invitation, activity, claim, can}`.
-* `GET /api/peers` (LHC) → LHCs in the caller's region.
-* `POST /api/meetups` (LHC) and `PUT /api/meetups/<id>` (host, DRAFT/REJECTED): `{title, description, category, event_date, start_time, end_time, venue, expected_attendees, budget_requested, budget_breakdown, invitee_ids[], submit}`.
+* `GET /api/peers` (LHC/UHC) → people the caller may invite: same-region LHCs for an LHC, other UHC members for a UHC member.
+* `POST /api/meetups` (LHC) and `PUT /api/meetups/<id>` (host, DRAFT/REJECTED): `{title, description, category, event_date, backup_date, start_time, end_time, region_id (UHC only), venue, expected_attendees, extra_budget?, extra_budget_note, collab_type, collab_name, collab_about, collab_agenda, collab_contact, collab_sponsored (yes|no), collab_sponsorship, invitee_ids[], submit}` — budget is computed as ₹200 × attendees + extra.`.
 * `DELETE /api/meetups/<id>` (host, DRAFT).
 * `POST /api/meetups/<id>/submit | send-to-management | withdraw` (host).
-* `POST /api/meetups/<id>/review {decision: APPROVE|REJECT, comments}` (Management; comments required to reject).
+* `POST /api/meetups/<id>/review {decision: APPROVE|REJECT, comments, date_choice: PRIMARY|BACKUP}` (Management; comments required to reject; BACKUP approves the backup date).
 * `POST /api/meetups/<id>/complete` · `POST /api/meetups/<id>/cancel {reason}` · `POST /api/meetups/<id>/comments {body}`.
 * `POST /api/invitations/<meetup_id>/respond {decision: ACCEPT|DECLINE, note}` (invitee).
 
 ### Claims
-* `GET /api/claims?status=` (Management: all · UHC: own house · LHC: own). `GET /api/claims/<id>`.
-* `POST /api/meetups/<id>/claim` — multipart: `amount_claimed, actual_attendance, attendance_notes, expense_notes, payout_details, receipts[]` (host, after the event).
-* `POST /api/claims/<id>/review {decision: APPROVE|IN_PROGRESS|REJECT, amount_approved, notes}` (Management).
+* `GET /api/meetups/<id>/claim-setup` (host) → `{per_head, payout (saved details or null), cohosts: [{id, name, house_name, has_details}]}` — co-hosts are accepted invitees from another house.
+* `POST /api/attendees/parse` — multipart `file` (.csv or .xlsx, ≤2 MB) → `{attendees: [{name, email}], skipped}`; needs "Name"/"Email" columns (or auto-detected).
+* `POST /api/meetups/<id>/claim` — multipart: `attendees` (JSON list of {name, email}), `amount_claimed` (may exceed budget), `expense_notes`, `post_link`, `receipts[]`, `payout_mode` = `SELF` | `OTHER` | `COHOST`, plus bank fields `payee_name, bank_name, account_number, ifsc, upi_id?` (SELF/OTHER; SELF is saved to the profile) or `payee_user_id` (COHOST → status `AWAITING_PAYEE`, co-host notified).
+* `POST /api/claims/<id>/payee-response {decision: CONFIRM|DECLINE, note}` (the co-host) — CONFIRM snapshots their saved details → `PENDING_REVIEW`; DECLINE → `PAYEE_DECLINED`.
+* `POST /api/claims/<id>/payee` (claimant, while `AWAITING_PAYEE`/`PAYEE_DECLINED`) — choose a different payee (same payout fields as above).
+* `GET /api/claims?status=` (Management: all · UHC: own house + own + paying them · LHC: own + paying them). `GET /api/claims/<id>` adds `attendees`, `files`. Bank fields are blanked (`bank_hidden: true`) unless the viewer is Management, the payee, or the claimant of a SELF/OTHER claim.
+* `POST /api/claims/<id>/review {decision: APPROVE|IN_PROGRESS|REJECT, amount_approved, notes}` (Management; only `PENDING_REVIEW`/`IN_PROGRESS`).
 * `GET /api/claims/<id>/files/<file_id>` — download a receipt.
+
+### Profile & insights
+* `GET|PUT|DELETE /api/me/payout` (LHC/UHC) — saved bank details `{account_holder, bank_name, account_number, ifsc, upi_id?}`, used to pre-fill claims.
+* `GET /api/insights/house` (UHC) — house totals, rank among houses, per-LHC activity, regional spread, monthly trend.
+* `GET /api/insights/me` (LHC) — personal totals, region totals and rank, houses active in the region, regional LHC table.
 
 ### Notifications & admin
 * `GET /api/notifications` · `POST /api/notifications/read`.

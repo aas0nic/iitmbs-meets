@@ -7,3 +7,4 @@ instance/
 data/*.db
 data/uploads/
 data/.secret_key
+.shots/

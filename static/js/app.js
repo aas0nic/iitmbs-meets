@@ -9,6 +9,7 @@ import * as home from './views/home.js';
 import * as meetups from './views/meetups.js';
 import * as detail from './views/detail.js';
 import * as propose from './views/propose.js';
+import * as claimForm from './views/claim-form.js';
 import * as invites from './views/invites.js';
 import * as claims from './views/claims.js';
 import * as insights from './views/insights.js';
@@ -22,8 +23,9 @@ const routes = [
   [/^\/meetups$/, meetups, 'meetups'],
   [/^\/meetups\/(\d+)$/, detail, 'meetups'],
   [/^\/meetups\/(\d+)\/edit$/, propose, 'meetups'],
+  [/^\/meetups\/(\d+)\/claim$/, claimForm, 'claims', ['LHC', 'UHC']],
   [/^\/new$/, propose, 'new'],
-  [/^\/invites$/, invites, 'invites', ['LHC']],
+  [/^\/invites$/, invites, 'invites', ['LHC', 'UHC']],
   [/^\/claims$/, claims, 'claims'],
   [/^\/insights$/, insights, 'insights'],
   [/^\/settings$/, settings, 'settings'],
@@ -45,7 +47,7 @@ async function route() {
   const match = routes.find(([re, , , roles]) => re.test(path) && (!roles || roles.includes(state.user.role)));
   if (!match) return navigate('/home');
   const [re, view, section] = match;
-  if (view === propose && state.user.role !== 'LHC') return navigate('/home');
+  if (view === propose && state.user.role === 'MANAGEMENT') return navigate('/home');
   const params = path.match(re).slice(1);
   setActive(section);
 
@@ -88,7 +90,7 @@ function navItems(role) {
     { id: 'home', label: 'Home', icon: 'home', href: '#/home' },
     { id: 'meetups', label: role === 'MANAGEMENT' ? 'Meetups' : 'Meetups', icon: 'calendar', href: '#/meetups', badge: 'meetups' },
   ];
-  if (role === 'LHC') items.push({ id: 'invites', label: 'Co-host invites', short: 'Invites', icon: 'inbox', href: '#/invites', badge: 'invites' });
+  if (role !== 'MANAGEMENT') items.push({ id: 'invites', label: 'Co-host invites', short: 'Invites', icon: 'inbox', href: '#/invites', badge: 'invites' });
   items.push({ id: 'claims', label: 'Reimbursements', short: 'Claims', icon: 'receipt', href: '#/claims', badge: 'claims' });
   items.push({ id: 'insights', label: 'Insights', icon: 'chart', href: '#/insights' });
   return items;
@@ -109,7 +111,7 @@ function renderNav() {
   // Phone tab bar: four destinations + account.
   const tabs = role === 'LHC'
     ? ['home', 'meetups', 'invites', 'claims']
-    : role === 'MANAGEMENT' ? ['home', 'meetups', 'claims', 'insights'] : ['home', 'meetups', 'insights', 'claims'];
+    : role === 'MANAGEMENT' ? ['home', 'meetups', 'claims', 'insights'] : ['home', 'meetups', 'invites', 'insights'];
   $('#tabbar').innerHTML = String(html`
     ${tabs.map((id) => items.find((i) => i.id === id)).map((it) => html`
       <a data-nav="${it.id}" href="${it.href}">${icon(it.icon)}<span>${it.short || it.label}</span>${it.badge && state.badges[it.badge] ? html`<span class="nav-count">${state.badges[it.badge]}</span>` : ''}</a>`)}
@@ -132,7 +134,7 @@ function renderIdentity() {
   $('#sidebarAvatar').innerHTML = String(avatar(u, 'avatar-sm'));
   $('#sidebarName').textContent = u.name;
   $('#sidebarRole').textContent = u.role === 'MANAGEMENT' ? 'Management' : `${ROLE_SHORT[u.role]} · ${u.house_name}`;
-  const canPropose = u.role === 'LHC';
+  const canPropose = u.role !== 'MANAGEMENT';
   $('#newProposalBtn').hidden = !canPropose;
   $('#newProposalIcon').hidden = !canPropose;
 }
@@ -255,7 +257,7 @@ async function showSignin() {
       <div class="signin-art-inner">
         <a class="brand" href="#"><img src="/static/img/iitm_logo.png" alt="" width="34" height="34"><span class="brand-text"><strong>Meetup Planner</strong><small>IIT Madras BS Degree</small></span></a>
         <div class="signin-pitch">
-          <p class="signin-eyebrow">For the house councils of IIT Madras BS</p>
+          <p class="signin-eyebrow">For the house councils of IIT Madras BS Degree</p>
           <h1>Plan meetups with your region. <em>Get them approved</em> in one place.</h1>
           <ol class="signin-steps">
             <li><span>1</span><div><strong>Propose</strong><small>Venue, date, budget and agenda in one form.</small></div></li>

@@ -1,3 +1,3 @@
-from . import claims, meetups, overview
+from . import claims, meetups, overview, profile
 
-blueprints = [meetups.bp, claims.bp, overview.bp]
+blueprints = [meetups.bp, claims.bp, overview.bp, profile.bp]

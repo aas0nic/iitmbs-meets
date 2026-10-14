@@ -15,7 +15,7 @@ export async function render(el, ctx) {
   const { user, query } = ctx;
   ctx.setTitle('Reimbursements');
   const reqs = [api.get('/api/claims')];
-  if (user.role === 'LHC') reqs.push(api.get('/api/meetups', { mine: 1, status: 'COMPLETED,APPROVED', when: 'past' }));
+  if (user.role !== 'MANAGEMENT') reqs.push(api.get('/api/meetups', { mine: 1, status: 'COMPLETED,APPROVED', when: 'past' }));
   const [{ claims }, ready] = await Promise.all(reqs);
   if (!ctx.isCurrent()) return;
 
@@ -29,7 +29,7 @@ export async function render(el, ctx) {
 
   const sub = {
     MANAGEMENT: 'Check bills and attendance against the approved budget, then pay out or send back.',
-    UHC: `Claims filed by ${user.house_name} LHCs. Read-only.`,
+    UHC: `Your own claims, plus claims filed by ${user.house_name} LHCs (read-only).`,
     LHC: 'Claims for meetups you hosted. File one after the meetup with bills and attendance.',
   }[user.role];
 
@@ -48,7 +48,7 @@ export async function render(el, ctx) {
       ${unclaimed.map((m) => html`<div class="task">
         <span class="task-icon accent">${icon('receipt')}</span>
         <span class="task-body"><span class="task-title">${m.title}</span><span class="task-sub">Held ${fmtDate(m.event_date)} · budget ${rupees(m.budget_requested)}</span></span>
-        <span class="task-actions"><a class="btn btn-sm btn-primary" href="#/meetups/${m.id}?claim=1">File claim</a></span>
+        <span class="task-actions"><a class="btn btn-sm btn-primary" href="#/meetups/${m.id}/claim">File claim</a></span>
       </div>`)}
     </section>` : ''}
 
@@ -85,7 +85,7 @@ function row(c) {
     </div>
     <div class="row-cell col-house">${house(c.house_slug, c.house_name)}</div>
     <div class="amount ${over ? 'over' : ''}">${rupees(c.amount_claimed)}<small>${over ? 'over' : 'of'} ${rupees(c.budget_requested)} budget</small></div>
-    <div class="row-cell col-att"><span>${c.actual_attendance}</span><span class="faint"> / ${c.expected_attendees} came</span></div>
+    <div class="row-cell col-att"><span>${c.actual_attendance}</span><span class="faint"> / ${c.expected_attendees} expected</span></div>
     <div class="row-status">${status(c.status, CLAIM_STATUS)}</div>
     <span class="row-chev">${icon('chevron-right', 'i-sm')}</span>
   </a>`;
@@ -106,8 +106,18 @@ async function openClaim(id, ctx) {
       </dl>
     </div>
     <div class="field"><span class="field-label">Expenses</span><p class="prose" style="font-size:13.5px">${claim.expense_notes}</p></div>
-    ${claim.attendance_notes ? html`<div class="field"><span class="field-label">Attendance proof</span><p class="muted">${claim.attendance_notes}</p></div>` : ''}
-    <div class="field"><span class="field-label">Pay to</span><p style="font-size:13px">${claim.payout_details}</p></div>
+    <div class="field"><span class="field-label">Post</span><a class="link" href="${claim.post_link}" target="_blank" rel="noopener" style="font-weight:400;word-break:break-all">${claim.post_link}</a></div>
+    <div class="field"><span class="field-label">Pay to · ${{ SELF: 'the host', OTHER: 'another student', COHOST: `co-host (${claim.payee_house_name})` }[claim.payout_mode]}</span>
+      ${claim.bank_hidden
+        ? html`<p class="muted">${claim.payout_mode === 'COHOST' ? claim.payee_user_name : 'Payee'} · bank details are visible to Management only.</p>`
+        : claim.account_number
+          ? html`<dl class="kv"><dt>Name</dt><dd>${claim.payee_name}</dd><dt>Bank</dt><dd>${claim.bank_name}</dd><dt>Account</dt><dd>${claim.account_number}</dd>
+              <dt>IFSC</dt><dd>${claim.ifsc}</dd>${claim.upi_id ? html`<dt>UPI</dt><dd>${claim.upi_id}</dd>` : ''}</dl>`
+          : html`<p class="muted">Waiting for ${claim.payee_user_name} to confirm their details.</p>`}
+    </div>
+    <details class="att-details"><summary>${claim.attendees.length} students attended <span class="faint">· show list</span></summary>
+      <div class="att-list" style="margin-top:8px"><div class="att-rows">${claim.attendees.map((a, i) => html`<div class="att-row"><span class="att-n">${i + 1}</span><span class="truncate">${a.name}</span><span class="truncate faint">${a.email}</span><span></span></div>`)}</div></div>
+    </details>
     <div class="field"><span class="field-label">Receipts · ${plural(claim.files.length, 'file')}</span>
       <div class="file-list" style="margin:0">${claim.files.map((f) => f.is_sample
         ? html`<div class="file-item" title="Sample data — no file attached">${icon('file', 'i-sm')}<span class="truncate">${f.original_name}</span><span class="faint small">sample</span></div>`

@@ -14,6 +14,9 @@ export async function render(el, ctx) {
   const u = ctx.user;
   ctx.setTitle('Settings');
   FONTS.forEach((f) => loadFont(f.id)); // previews render in each typeface
+  const canClaim = u.role !== 'MANAGEMENT';
+  let payout = canClaim ? (await api.get('/api/me/payout')).payout : null;
+  if (!ctx.isCurrent()) return;
 
   const draw = () => {
     const p = getPrefs();
@@ -53,6 +56,28 @@ export async function render(el, ctx) {
           </div>
         </section>
 
+        ${canClaim ? html`<section class="card" id="payout">
+          <header class="card-head"><h2 class="card-title">Payout details</h2>
+            <span class="count hide-mobile">${payout ? `Saved · used to fill your reimbursement claims` : 'Used to fill your reimbursement claims'}</span></header>
+          <form class="card-pad payout-form" data-payout novalidate>
+            <div class="form-error" data-payout-error hidden></div>
+            <div class="field-row">
+              <label class="field"><span class="field-label">Account holder name</span><input class="input" name="account_holder" autocomplete="name" value="${payout?.account_holder || u.name}"></label>
+              <label class="field"><span class="field-label">Bank name</span><input class="input" name="bank_name" value="${payout?.bank_name || ''}" placeholder="e.g. State Bank of India"></label>
+            </div>
+            <div class="field-row">
+              <label class="field"><span class="field-label">Account number</span><input class="input" name="account_number" inputmode="numeric" autocomplete="off" value="${payout?.account_number || ''}" placeholder="9 to 18 digits"></label>
+              <label class="field"><span class="field-label">IFSC</span><input class="input" name="ifsc" autocomplete="off" value="${payout?.ifsc || ''}" placeholder="e.g. SBIN0001234" style="text-transform:uppercase"></label>
+            </div>
+            <label class="field"><span class="field-label">UPI ID <span class="opt">optional</span></span><input class="input" name="upi_id" autocomplete="off" value="${payout?.upi_id || ''}" placeholder="name@bank"></label>
+            <div class="payout-actions">
+              <span class="field-hint">Only you and Management (when paying a claim) see these.</span>
+              ${payout ? html`<button type="button" class="btn btn-ghost btn-sm" data-payout-clear>Remove</button>` : ''}
+              <button type="submit" class="btn btn-primary btn-sm">${payout ? 'Update details' : 'Save details'}</button>
+            </div>
+          </form>
+        </section>` : ''}
+
         ${u.role === 'MANAGEMENT' ? html`<section class="card">
           <header class="card-head"><h2 class="card-title">Demo data</h2></header>
           <div class="setting">
@@ -65,7 +90,32 @@ export async function render(el, ctx) {
   };
   draw();
 
+  el.addEventListener('submit', async (e) => {
+    if (!e.target.matches('[data-payout]')) return;
+    e.preventDefault();
+    const form = e.target;
+    const err = form.querySelector('[data-payout-error]');
+    err.hidden = true;
+    const btn = form.querySelector('[type=submit]');
+    btn.classList.add('is-loading');
+    try {
+      ({ payout } = await api.put('/api/me/payout', Object.fromEntries(new FormData(form))));
+      toast('Payout details saved. They will fill in automatically on your next claim.');
+      draw();
+    } catch (ex) {
+      err.textContent = ex.message;
+      err.hidden = false;
+    } finally { btn.classList.remove('is-loading'); }
+  });
+
   el.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-payout-clear]')) {
+      await api.del('/api/me/payout');
+      payout = null;
+      toast('Saved payout details removed.');
+      draw();
+      return;
+    }
     const pick = e.target.closest('[data-pick-mode], [data-pick-accent], [data-pick-font]');
     if (pick) {
       const { pickMode: mode, pickAccent: accent, pickFont: font } = pick.dataset;

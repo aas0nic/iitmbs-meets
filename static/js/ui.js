@@ -87,6 +87,8 @@ export const STATUS = {
   // claims
   PENDING_REVIEW: 'To verify',
   IN_PROGRESS: 'With accounts',
+  AWAITING_PAYEE: 'Waiting on co-host',
+  PAYEE_DECLINED: 'Payee declined',
   // invitations
   INVITED: 'Awaiting reply',
   ACCEPTED: 'Accepted',
@@ -110,7 +112,7 @@ const GLYPHS = {
 };
 const GLYPH_FOR = {
   meetup: { DRAFT: 'dashed', PEER_REVIEW: 'quarter', PENDING: 'half', APPROVED: 'three', COMPLETED: 'done', REJECTED: 'x', CANCELLED: 'slash' },
-  claim: { PENDING_REVIEW: 'half', IN_PROGRESS: 'three', APPROVED: 'done', REJECTED: 'x' },
+  claim: { AWAITING_PAYEE: 'quarter', PAYEE_DECLINED: 'x', PENDING_REVIEW: 'half', IN_PROGRESS: 'three', APPROVED: 'done', REJECTED: 'x' },
   invite: { INVITED: 'dashed', ACCEPTED: 'done', DECLINED: 'x' },
 };
 export const statusIcon = (s, kind = 'meetup') =>
@@ -165,7 +167,7 @@ export function meetupRow(m, { extra } = {}) {
       <div class="row-title">${m.title}</div>
       <div class="row-meta">
         <span>${fmtTimeRange(m.start_time, m.end_time)}</span>
-        <span class="sep">${m.region_name}</span>
+        <span class="sep">${m.region_name}</span>${m.backup_date && ['PEER_REVIEW', 'PENDING'].includes(m.status) ? html`<span class="sep">or ${fmtDate(m.backup_date, { day: 'numeric', month: 'short' })}</span>` : ''}
         <span class="sep truncate">${m.proposer_name}</span>
       </div>
     </div>
@@ -288,6 +290,39 @@ export async function busy(btn, fn) {
 }
 
 export const formData = (form) => Object.fromEntries(new FormData(form).entries());
+
+// ── Inline field errors (forms mark containers with data-field="name") ─────
+export function clearFieldError(form, name) {
+  const f = name && form.querySelector(`[data-field="${name}"]`);
+  if (!f) return;
+  f.classList.remove('has-error');
+  f.querySelector(':scope > .field-error')?.remove();
+}
+
+/** problems: [[fieldName, message], …] in page order. Marks each field, scrolls to and focuses the first. */
+export function showFieldErrors(form, problems) {
+  form.querySelectorAll('.has-error').forEach((f) => { f.classList.remove('has-error'); f.querySelector(':scope > .field-error')?.remove(); });
+  problems.forEach(([name, msg]) => {
+    const f = form.querySelector(`[data-field="${name}"]`);
+    if (!f) return;
+    f.classList.add('has-error');
+    f.insertAdjacentHTML('beforeend', `<span class="field-error"><svg class="i i-sm"><use href="#i-alert"/></svg>${esc(msg)}</span>`);
+  });
+  const first = form.querySelector(`[data-field="${problems[0][0]}"]`);
+  if (!first) return;
+  first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const target = first.querySelector('input:not([type=radio]):not([type=file]), select, textarea') || first.querySelector('input');
+  setTimeout(() => target?.focus({ preventScroll: true }), 350);
+  toast(problems.length === 1 ? 'One field needs attention.' : `${problems.length} fields need attention.`, { error: true });
+}
+
+// Client-side mirrors of the server's bank-detail rules (portal/api/common.py).
+export const BANK_RULES = {
+  account: /^\d{9,18}$/,
+  ifsc: /^[A-Z]{4}0[A-Z0-9]{6}$/,
+  upi: /^[\w.\-]{2,256}@[A-Za-z][A-Za-z0-9.]{1,63}$/,
+  email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/,
+};
 
 // ── Appearance preferences (per device) ────────────────────────────────────
 export const MODES = [

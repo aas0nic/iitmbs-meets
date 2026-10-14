@@ -2,7 +2,7 @@
 import { api } from '../api.js';
 import {
   $, ago, avatar, busy, CLAIM_STATUS, confirmDialog, crest, daysUntil, fmtLongDate, fmtTimeRange, formData, fullTime,
-  html, icon, on, openDialog, plural, relDay, rupees, status, toast,
+  fmtDate, html, icon, on, openDialog, plural, relDay, rupees, status, toast,
 } from '../ui.js';
 
 export async function render(el, ctx) {
@@ -13,7 +13,7 @@ export async function render(el, ctx) {
   ctx.setTitle(['Meetups', '#/meetups'], m.title);
   el.innerHTML = String(page(data, ctx));
   bind(el, data, ctx);
-  if (ctx.query.get('claim') && data.can.file_claim && !data.claim) fileClaim(data, ctx);
+  if (data.claim?.can_confirm_payee) loadPayeePanel(el);
 }
 
 // ── Layout ──────────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ function page(d, ctx) {
       <div class="eyebrow">${crest(m.house_slug)} ${m.house_name} <span class="sep">${m.region_name}</span><span class="sep">${m.category_label}</span></div>
       <div class="detail-title-row"><h1 class="detail-title">${m.title}</h1>${status(m.status)}</div>
       <div class="detail-meta">
-        <span>${icon('calendar')}${fmtLongDate(m.event_date)}${when >= 0 && when < 7 && !['COMPLETED', 'CANCELLED'].includes(m.status) ? html`<span class="faint">(${relDay(m.event_date).toLowerCase()})</span>` : ''}</span>
+        <span>${icon('calendar')}${fmtLongDate(m.event_date)}${m.backup_date && ['PEER_REVIEW', 'PENDING', 'DRAFT', 'REJECTED'].includes(m.status) ? html`<span class="faint">or ${fmtDate(m.backup_date)}</span>` : ''}${when >= 0 && when < 7 && !['COMPLETED', 'CANCELLED'].includes(m.status) ? html`<span class="faint">(${relDay(m.event_date).toLowerCase()})</span>` : ''}</span>
         <span>${icon('clock')}${fmtTimeRange(m.start_time, m.end_time)}</span>
         <span>${icon('pin')}${m.venue}</span>
       </div>
@@ -37,6 +37,7 @@ function page(d, ctx) {
       <div class="stack">
         <section class="card card-pad"><p class="prose">${m.description}</p></section>
         ${facts(m, d)}
+        ${collabCard(m)}
         ${people(m, d)}
         ${timeline(d)}
       </div>
@@ -62,7 +63,8 @@ function steps(m, invitations) {
 }
 
 function facts(m, d) {
-  const perHead = m.budget_requested && m.expected_attendees ? Math.round(m.budget_requested / m.expected_attendees) : 0;
+  const allowance = m.budget_per_head * m.expected_attendees;
+  const decided = ['APPROVED', 'COMPLETED', 'CANCELLED'].includes(m.status) && m.reviewed_at;
   return html`<section class="card">
     <header class="card-head"><h2 class="card-title">Logistics</h2></header>
     <div class="facts">
@@ -70,9 +72,13 @@ function facts(m, d) {
         <a class="link small" style="margin-left:6px;font-weight:400" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.venue)}" target="_blank" rel="noopener">Open in Maps</a></div></div>
       <div class="fact"><div class="fact-label">Region</div><div class="fact-value">${m.region_name}</div></div>
       <div class="fact"><div class="fact-label">Expected attendance</div><div class="fact-value">${m.expected_attendees}</div></div>
-      <div class="fact"><div class="fact-label">Budget requested</div><div class="fact-value">${m.budget_requested ? rupees(m.budget_requested) : 'None'}</div></div>
-      <div class="fact"><div class="fact-label">Per attendee</div><div class="fact-value">${perHead ? rupees(perHead) : '—'}</div></div>
-      ${m.budget_breakdown ? html`<div class="fact wide"><div class="fact-label">Breakdown</div><div class="fact-value prose" style="font-size:13.5px">${m.budget_breakdown}</div></div>` : ''}
+      ${m.backup_date ? html`<div class="fact wide"><div class="fact-label">${decided ? 'Alternate date (not chosen)' : 'Backup date'}</div><div class="fact-value">${fmtLongDate(m.backup_date)}</div></div>` : ''}
+      <div class="fact wide"><div class="fact-label">Budget</div><div class="fact-value">
+        <dl class="kv budget-kv">
+          <dt>Standard allowance <span class="faint">· ${m.expected_attendees} × ${rupees(m.budget_per_head)}</span></dt><dd>${rupees(allowance)}</dd>
+          ${m.extra_budget ? html`<dt>Extra budget <span class="faint">· ${m.extra_budget_note}</span></dt><dd>${rupees(m.extra_budget)}</dd>` : ''}
+          <dt class="kv-total">Total requested</dt><dd class="kv-total">${rupees(m.budget_requested)}</dd>
+        </dl></div></div>
       ${m.submitted_at ? html`<div class="fact wide"><div class="fact-label">Submitted</div><div class="fact-value">${fullTime(m.submitted_at)}</div></div>` : ''}
     </div>
   </section>`;
@@ -116,6 +122,8 @@ const TL = {
   CANCELLED: ['x', 'bad', 'cancelled the meetup'],
   COMMENT: ['message', '', 'commented'],
   CLAIM_FILED: ['receipt', 'accent', 'filed a reimbursement claim'],
+  CLAIM_PAYEE_CONFIRMED: ['wallet', 'ok', 'confirmed their bank details for the payout'],
+  CLAIM_PAYEE_DECLINED: ['wallet', 'bad', 'declined to receive the payout'],
   CLAIM_IN_PROGRESS: ['receipt', '', 'forwarded the claim to Accounts'],
   CLAIM_APPROVED: ['wallet', 'ok', 'approved the claim'],
   CLAIM_REJECTED: ['receipt', 'bad', 'rejected the claim'],
@@ -143,6 +151,23 @@ function timeline(d) {
   </section>`;
 }
 
+function collabCard(m) {
+  if (!m.collab_type || m.collab_type === 'NONE') return '';
+  const ext = m.collab_type === 'EXTERNAL';
+  return html`<section class="card">
+    <header class="card-head"><h2 class="card-title">Collaboration</h2>
+      <span class="tag">${ext ? 'External organisation' : 'IITM society'}</span>
+      ${ext && m.collab_sponsored ? html`<span class="tag" style="color:var(--st-approved)">Sponsored</span>` : ''}</header>
+    <div class="facts">
+      <div class="fact wide"><div class="fact-label">${ext ? 'Organisation' : 'Society'}</div><div class="fact-value">${m.collab_name}</div></div>
+      ${ext ? html`<div class="fact wide"><div class="fact-label">About them</div><div class="fact-value prose" style="font-size:14px">${m.collab_about}</div></div>` : ''}
+      <div class="fact wide"><div class="fact-label">${ext ? 'Agenda of the collaboration' : 'What the society will do'}</div><div class="fact-value prose" style="font-size:14px">${m.collab_agenda}</div></div>
+      <div class="fact wide"><div class="fact-label">Point of contact</div><div class="fact-value">${m.collab_contact}</div></div>
+      ${ext ? html`<div class="fact wide"><div class="fact-label">Sponsorship</div><div class="fact-value">${m.collab_sponsored ? html`<span class="prose" style="font-size:14px">${m.collab_sponsorship}</span>` : 'None'}</div></div>` : ''}
+    </div>
+  </section>`;
+}
+
 function decisionNote(m) {
   if (!m.reviewed_by || !['APPROVED', 'COMPLETED', 'REJECTED'].includes(m.status)) return '';
   const bad = m.status === 'REJECTED';
@@ -154,20 +179,48 @@ function decisionNote(m) {
   </div>`;
 }
 
+const PAYOUT_LABEL = { SELF: 'The host', OTHER: 'Another student', COHOST: 'Co-host' };
+
 function claimCard(c) {
+  const payee = c.payout_mode === 'COHOST' ? `${c.payee_user_name} (${c.payee_house_name})`
+    : c.payout_mode === 'SELF' ? c.payee_name || 'The host' : c.payee_name || 'Another student';
   return html`<section class="card">
     <header class="card-head"><h2 class="card-title">Reimbursement</h2>${status(c.status, CLAIM_STATUS)}</header>
     <div class="card-pad">
       <dl class="kv">
         <dt>Claimed</dt><dd>${rupees(c.amount_claimed)}</dd>
         ${c.amount_approved != null ? html`<dt>Approved</dt><dd>${rupees(c.amount_approved)}</dd>` : ''}
-        <dt>Attendance</dt><dd>${c.actual_attendance}</dd>
+        <dt>Attendance</dt><dd>${plural(c.actual_attendance, 'student')}</dd>
         <dt>Receipts</dt><dd>${plural(c.files.length, 'file')}</dd>
+        <dt>Pay to</dt><dd>${payee}<br><span class="faint small" style="font-weight:400">${PAYOUT_LABEL[c.payout_mode]}${c.bank_hidden ? ' · details hidden' : ''}</span></dd>
       </dl>
+      ${c.status === 'AWAITING_PAYEE' ? html`<p class="small muted" style="margin-top:12px">Waiting for ${c.payee_user_name} to confirm their bank details.</p>` : ''}
+      ${c.status === 'PAYEE_DECLINED' ? html`<p class="small" style="margin-top:12px;color:var(--st-rejected)">${c.payee_user_name} declined${c.payee_note ? `: ${c.payee_note}` : '.'}</p>` : ''}
       ${c.review_notes ? html`<p class="small muted" style="margin-top:12px">${c.review_notes}</p>` : ''}
-      <a class="btn btn-sm btn-block" style="margin-top:14px" href="#/claims?open=${c.id}">Open claim</a>
+      <div data-payee-panel></div>
+      ${c.can_change_payee ? html`<a class="btn btn-sm btn-primary btn-block" style="margin-top:14px" href="#/meetups/${c.meetup_id}/claim">${c.status === 'PAYEE_DECLINED' ? 'Choose another payee' : 'Change payee'}</a>` : ''}
+      <a class="btn btn-sm btn-block" style="margin-top:8px" href="#/claims?open=${c.id}">Open claim</a>
     </div>
   </section>`;
+}
+
+/** For the co-host named as payee: show their saved details and let them confirm or decline. */
+async function loadPayeePanel(el) {
+  const box = el.querySelector('[data-payee-panel]');
+  if (!box) return;
+  const { payout } = await api.get('/api/me/payout');
+  box.innerHTML = String(html`<div class="callout is-accent" style="margin-top:14px">
+    <div class="callout-title">${icon('wallet', 'i-sm')} You're named as the payee</div>
+    ${payout ? html`<p>Check these are the details the money should go to:</p>
+      <dl class="kv" style="margin-top:8px"><dt>Name</dt><dd>${payout.account_holder}</dd><dt>Bank</dt><dd>${payout.bank_name}</dd>
+        <dt>Account</dt><dd>${payout.account_number}</dd><dt>IFSC</dt><dd>${payout.ifsc}</dd>${payout.upi_id ? html`<dt>UPI</dt><dd>${payout.upi_id}</dd>` : ''}</dl>
+      <div class="btn-row" style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-sm" data-payee="DECLINE">Decline</button>
+        <button class="btn btn-sm btn-primary" style="flex:1" data-payee="CONFIRM">${icon('check', 'i-sm')} Details are correct</button></div>
+      <p class="small faint" style="margin-top:8px">Wrong details? <a class="link" href="#/settings">Update them in Settings</a>, then come back to confirm.</p>`
+    : html`<p>You haven't saved bank details. <a class="link" href="#/settings">Add them in Settings</a>, then confirm here.</p>
+      <button class="btn btn-sm" style="margin-top:10px" data-payee="DECLINE">Decline</button>`}
+  </div>`);
 }
 
 // ── Action panel ────────────────────────────────────────────────────────────
@@ -182,7 +235,12 @@ function actionPanel(d, ctx) {
     blocks.push(html`<form class="action-panel" data-review>
       <h3>Your decision</h3>
       <p>${invitations.length ? `${accepted} of ${invitations.length} co-hosts accepted${waiting ? `, ${waiting} didn't reply` : ''}.` : 'No co-hosts.'}
-        ${m.budget_requested ? html` Requesting <b>${rupees(m.budget_requested)}</b> for ${m.expected_attendees} people.` : ' No budget requested.'}</p>
+        ${m.collab_type && m.collab_type !== 'NONE' ? html`With ${m.collab_type === 'EXTERNAL' ? 'external organisation' : 'society'} <b>${m.collab_name}</b>${m.collab_sponsored ? ' (sponsored)' : ''}. ` : ''}Requesting <b>${rupees(m.budget_requested)}</b>${m.extra_budget ? html`, including <b>${rupees(m.extra_budget)}</b> extra` : ''} for ${m.expected_attendees} people.</p>
+      ${m.backup_date ? html`<div class="field"><span class="field-label">Approve for</span>
+        <div class="choice-group" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+          <label class="choice"><input type="radio" name="date_choice" value="PRIMARY" checked>${icon('calendar')}<span><strong>Preferred</strong><small>${fmtDate(m.event_date)}</small></span></label>
+          <label class="choice"><input type="radio" name="date_choice" value="BACKUP">${icon('calendar')}<span><strong>Backup</strong><small>${fmtDate(m.backup_date)}</small></span></label>
+        </div></div>` : ''}
       <textarea class="textarea" name="comments" rows="3" placeholder="Feedback for the host (required if rejecting)"></textarea>
       <div class="btn-row">
         <button class="btn btn-danger" type="button" data-decide="REJECT">${icon('x', 'i-sm')} Reject</button>
@@ -296,7 +354,8 @@ function bind(el, d, ctx) {
       return;
     }
     busy(btn, async () => {
-      await api.post(`${base}/review`, { decision, comments });
+      const date_choice = $('[data-review] [name=date_choice]:checked', el)?.value || 'PRIMARY';
+      await api.post(`${base}/review`, { decision, comments, date_choice });
       done(decision === 'APPROVE' ? 'Approved. The host and co-hosts have been notified.' : 'Rejected with feedback. The host has been notified.');
     });
   });
@@ -312,7 +371,7 @@ function bind(el, d, ctx) {
   on(el, 'click', '[data-act]', async (e, btn) => {
     const act = btn.dataset.act;
     if (act === 'edit') { location.hash = `#/meetups/${m.id}/edit`; return; }
-    if (act === 'file_claim') { fileClaim(d, ctx); return; }
+    if (act === 'file_claim') { location.hash = `#/meetups/${m.id}/claim`; return; }
     if (act === 'delete') {
       if (!await confirmDialog({ title: 'Delete this draft?', text: 'The draft and its co-host list will be removed. This cannot be undone.', confirmLabel: 'Delete draft', danger: true })) return;
       return busy(btn, async () => { await api.del(base); toast('Draft deleted.'); location.hash = '#/meetups'; });
@@ -338,6 +397,24 @@ function bind(el, d, ctx) {
     busy(btn, async () => { await api.post(url); done(msg); });
   });
 
+  on(el, 'click', '[data-payee]', async (e, btn) => {
+    const decision = btn.dataset.payee;
+    let note = '';
+    if (decision === 'DECLINE') {
+      const ok = await openDialog({
+        title: 'Decline the payout?', subtitle: `${m.proposer_name} will be asked to choose someone else.`,
+        body: html`<label class="field"><span class="field-label">Reason</span><textarea class="textarea" name="note" rows="2"></textarea></label>`,
+        submitLabel: 'Decline', submitClass: 'btn-danger',
+        onSubmit: async (form) => { note = form.note.value.trim(); if (note.length < 3) throw new Error('Add a short reason.'); return true; },
+      });
+      if (!ok) return;
+    }
+    busy(btn, async () => {
+      await api.post(`/api/claims/${d.claim.id}/payee-response`, { decision, note });
+      done(decision === 'CONFIRM' ? 'Confirmed. The claim is now with Management.' : 'Declined. The host has been notified.');
+    });
+  });
+
   $('[data-comment]', el)?.addEventListener('submit', (e) => {
     e.preventDefault();
     const form = e.target;
@@ -350,71 +427,3 @@ function bind(el, d, ctx) {
   });
 }
 
-// ── Claim form ──────────────────────────────────────────────────────────────
-export async function fileClaim(d, ctx) {
-  const m = d.meetup;
-  const ok = await openDialog({
-    title: 'File reimbursement claim',
-    subtitle: `${m.title} · budget ${rupees(m.budget_requested)}`,
-    wide: true,
-    submitLabel: 'Submit claim',
-    body: html`
-      <div class="field-row keep">
-        <label class="field"><span class="field-label">Amount spent</span>
-          <span class="prefix-input"><span>₹</span><input class="input" name="amount_claimed" inputmode="numeric" required value="${m.budget_requested || ''}"></span>
-          <span class="field-hint">Approved budget was ${rupees(m.budget_requested)}</span></label>
-        <label class="field"><span class="field-label">People who attended</span>
-          <input class="input" name="actual_attendance" inputmode="numeric" required placeholder="${m.expected_attendees}">
-          <span class="field-hint">Expected ${m.expected_attendees}</span></label>
-      </div>
-      <label class="field"><span class="field-label">What the money was spent on</span>
-        <textarea class="textarea" name="expense_notes" rows="3" required placeholder="One line per bill, e.g. Snacks from … — ₹1,200">${m.budget_breakdown || ''}</textarea></label>
-      <label class="field"><span class="field-label">Attendance proof <span class="opt">optional</span></span>
-        <input class="input" name="attendance_notes" placeholder="e.g. Sign-in sheet and group photo attached"></label>
-      <label class="field"><span class="field-label">Pay to</span>
-        <input class="input" name="payout_details" required placeholder="UPI ID or bank account"></label>
-      <div class="field"><span class="field-label">Bills and receipts</span>
-        <label class="file-drop" data-drop>${icon('upload', 'i-lg')}<strong>Choose files</strong><span class="small">PDF or images, up to 10 files</span>
-          <input type="file" name="receipts" multiple accept=".pdf,image/*"></label>
-        <div class="file-list" data-files></div>
-      </div>`,
-    onSubmit: async (form) => {
-      const fd = new FormData(form);
-      fd.delete('receipts');
-      files.forEach((f) => fd.append('receipts', f));
-      await api.post(`/api/meetups/${m.id}/claim`, fd);
-      return true;
-    },
-  });
-
-  if (ok) { toast('Claim submitted for verification.'); ctx.refreshBadges(); ctx.rerender(); }
-}
-
-// Files picked in the claim dialog (kept outside the form so we can add from multiple picks / drops).
-let files = [];
-document.addEventListener('change', (e) => {
-  if (e.target.matches('#dialog input[name=receipts]')) { addFiles(e.target.files); e.target.value = ''; }
-});
-document.addEventListener('dragover', (e) => { const z = e.target.closest?.('[data-drop]'); if (z) { e.preventDefault(); z.classList.add('is-over'); } });
-document.addEventListener('dragleave', (e) => e.target.closest?.('[data-drop]')?.classList.remove('is-over'));
-document.addEventListener('drop', (e) => {
-  const z = e.target.closest?.('[data-drop]');
-  if (!z) return;
-  e.preventDefault();
-  z.classList.remove('is-over');
-  addFiles(e.dataTransfer.files);
-});
-document.addEventListener('click', (e) => {
-  const rm = e.target.closest('[data-remove-file]');
-  if (rm) { files.splice(Number(rm.dataset.removeFile), 1); drawFiles(); }
-});
-document.getElementById('dialog').addEventListener('close', () => { files = []; });
-
-function addFiles(list) { files = [...files, ...list].slice(0, 10); drawFiles(); }
-function drawFiles() {
-  const box = document.querySelector('#dialog [data-files]');
-  if (!box) return;
-  box.innerHTML = String(html`${files.map((f, i) => html`<div class="file-item">${icon('file', 'i-sm')}<span class="truncate">${f.name}</span>
-    <span class="faint small">${Math.max(1, Math.round(f.size / 1024))} KB</span>
-    <button type="button" class="icon-btn" style="width:28px;height:28px" data-remove-file="${i}" aria-label="Remove">${icon('x', 'i-sm')}</button></div>`)}`);
-}

@@ -1,4 +1,7 @@
-// Analytics across 12 houses × 10 regions.
+// Insights, per role:
+//   Management → institute-wide (12 houses × 10 regions, filters)
+//   UHC        → their house: LHC activity, regional spread, rank among houses
+//   LHC        → themselves + their region: peers, houses active in the region, rank among regions
 import { api } from '../api.js';
 import { $, crest, html, rupees } from '../ui.js';
 
@@ -13,6 +16,8 @@ const SERIES = [
 export async function render(el, ctx) {
   const { user, meta, query } = ctx;
   ctx.setTitle('Insights');
+  if (user.role === 'UHC') return renderHouse(el, ctx);
+  if (user.role === 'LHC') return renderMe(el, ctx);
   const f = {
     house_id: query.get('house') ?? (user.role === 'UHC' ? String(user.house_id) : ''),
     region_id: query.get('region') || '',
@@ -121,11 +126,11 @@ function bars(title, items, label) {
   </section>`;
 }
 
-function months(list) {
+function months(list, title = 'Meetups by month') {
   const max = Math.max(1, ...list.map((m) => m.count));
   const label = (key) => new Date(key + '-01T00:00').toLocaleDateString('en-IN', { month: 'short' });
   return html`<section class="card">
-    <header class="card-head"><h2 class="card-title">Meetups by month</h2><span class="count">last 6 months</span></header>
+    <header class="card-head"><h2 class="card-title">${title}</h2><span class="count">last 6 months</span></header>
     <div class="spark">${list.map((m) => html`<div class="spark-col"><span class="spark-n">${m.count}</span><div class="spark-bar" style="height:${(m.count / max) * 100}%"></div></div>`)}</div>
     <div class="spark-x">${list.map((m) => html`<span>${label(m.month)}</span>`)}</div>
   </section>`;
@@ -142,4 +147,95 @@ function categories(list) {
       <div class="bar-n">${c.count}</div>
     </div>`)}</div>
   </section>`;
+}
+
+
+// ── UHC: house insights ─────────────────────────────────────────────────────
+const rate = (r) => (r == null ? '—' : html`${r}<small>%</small>`);
+const ord = (n) => `#${n}`;
+
+async function renderHouse(el, ctx) {
+  const d = await api.get('/api/insights/house');
+  if (!ctx.isCurrent()) return;
+  const t = d.totals;
+  const active = d.lhcs.filter((l) => l.proposed > 0).length;
+  el.innerHTML = String(html`
+    <div class="page-head"><div class="page-head-text house-banner">${crest(d.house.slug, 'crest-lg')}
+      <div><h1 class="page-title">${d.house.name} insights</h1>
+        <p class="page-sub">How your house's LHCs are doing across the 10 regions. Counts exclude drafts.</p></div></div></div>
+
+    <div class="stats kpis">
+      ${kpi('Meetups', t.total, `${t.in_review} in review`)}
+      ${kpi('Held', t.completed, `${ord(d.rank)} of ${d.of} houses`)}
+      ${kpi('Students reached', t.reached.toLocaleString('en-IN'), 'At meetups held')}
+      ${kpi('Approval rate', rate(t.approval_rate), `Institute: ${d.institute.approval_rate ?? '—'}%`)}
+      ${kpi('Reimbursed', rupees(t.reimbursed), 'Claims paid out')}
+      ${kpi('Active LHCs', html`${active}<small>/ ${d.lhcs.length}</small>`, 'Have proposed a meetup')}
+    </div>
+
+    <section class="card section">
+      <header class="card-head"><h2 class="card-title">Your LHCs</h2><span class="count">${d.lhcs.length - active} yet to propose</span></header>
+      ${peopleTable(d.lhcs, { regionCol: true })}
+    </section>
+
+    <div class="grid grid-2 section">
+      ${bars('Across regions', d.by_region, (r) => html`<span class="faint" style="font-size:11px;font-weight:600;width:28px">${r.code}</span><span>${r.name}</span>`)}
+      ${months(d.months, `${d.house.name} meetups by month`)}
+    </div>`);
+}
+
+// ── LHC: personal + regional insights ───────────────────────────────────────
+async function renderMe(el, ctx) {
+  const d = await api.get('/api/insights/me');
+  if (!ctx.isCurrent()) return;
+  const me = d.me;
+  const r = d.region;
+  el.innerHTML = String(html`
+    <div class="page-head"><div class="page-head-text"><h1 class="page-title">Your insights</h1>
+      <p class="page-sub">Your meetups, and how ${r.name} is doing. Counts exclude drafts.</p></div></div>
+
+    <div class="stats kpis">
+      ${kpi('Proposed', me.total, `${me.in_review} in review`)}
+      ${kpi('Approved', me.approved + me.completed, `Approval rate ${me.approval_rate ?? '—'}%`)}
+      ${kpi('Held', me.completed, 'Meetups you hosted')}
+      ${kpi('Students reached', me.reached.toLocaleString('en-IN'), 'At your meetups')}
+      ${kpi('Co-hosted', me.cohosted, 'Invites you accepted')}
+      ${kpi('Reimbursed', rupees(me.reimbursed), 'Paid out to you')}
+    </div>
+
+    <div class="section-head section"><h2 class="section-title">${r.name} region</h2></div>
+    <div class="stats">
+      ${kpi('Meetups', r.total, `${r.in_review} in review`)}
+      ${kpi('Held', r.completed, `${r.reached.toLocaleString('en-IN')} students reached`)}
+      ${kpi('Coming up', r.upcoming, 'Approved, not yet held')}
+      ${kpi('Region rank', ord(d.rank), `of ${d.of} regions by meetups held`)}
+    </div>
+
+    <div class="grid grid-2 section">
+      ${bars(`Houses active in ${r.name}`, d.by_house, (h) => html`${crest(h.slug)}<span>${h.name}</span>`)}
+      ${months(d.months, `${r.name} meetups by month`)}
+    </div>
+
+    <section class="card section">
+      <header class="card-head"><h2 class="card-title">LHCs in ${r.name}</h2><span class="count">one from each house</span></header>
+      ${peopleTable(d.peers, { me: ctx.user.id })}
+    </section>`);
+}
+
+function peopleTable(people, { regionCol = false, me = null } = {}) {
+  return html`<div class="tbl-wrap"><table class="tbl">
+    <thead><tr>
+      <th>LHC</th>${regionCol ? html`<th class="hide-mobile">Region</th>` : html`<th class="hide-mobile">House</th>`}
+      <th class="n">Proposed</th><th class="n">Approved</th><th class="n">Held</th>
+      <th class="n hide-mobile">Reached</th><th class="n hide-mobile">Co-hosted</th><th class="hide-mobile">Last meetup</th>
+    </tr></thead>
+    <tbody>${people.map((p) => html`<tr class="${p.id === me ? 'is-me' : ''} ${p.proposed ? '' : 'is-quiet'}">
+      <td><div class="tbl-person">${regionCol ? '' : crest(p.house_slug)}<span><b>${p.name}</b>${p.id === me ? html` <span class="tag">You</span>` : ''}
+        <small class="only-mobile">${regionCol ? p.region_name : p.house_name}</small></span></div></td>
+      ${regionCol ? html`<td class="hide-mobile">${p.region_name}</td>` : html`<td class="hide-mobile">${p.house_name}</td>`}
+      <td class="n">${p.proposed || html`<span class="faint">0</span>`}</td><td class="n">${p.approved}</td><td class="n">${p.held}</td>
+      <td class="n hide-mobile">${p.reached}</td><td class="n hide-mobile">${p.cohosted}</td>
+      <td class="hide-mobile faint">${p.last_date ? new Date(p.last_date + 'T00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'None yet'}</td>
+    </tr>`)}</tbody>
+  </table></div>`;
 }

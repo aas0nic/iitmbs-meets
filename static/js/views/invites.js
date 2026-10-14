@@ -1,4 +1,4 @@
-// Co-host invitations for the signed-in LHC.
+// Co-host invitations for the signed-in LHC or UHC member.
 import { api } from '../api.js';
 import { busy, datebox, empty, fmtTimeRange, html, icon, on, status, toast } from '../ui.js';
 
@@ -25,7 +25,7 @@ export async function render(el, ctx) {
   el.innerHTML = String(html`
     <div class="page-head"><div class="page-head-text">
       <h1 class="page-title">Co-host invites</h1>
-      <p class="page-sub">LHCs in ${ctx.user.region_name} who want you on their meetup. Proposals go to Management once every co-host replies.</p>
+      <p class="page-sub">${ctx.user.role === 'UHC' ? 'UHC members from other houses' : `LHCs in ${ctx.user.region_name}`} who want you on their meetup. Proposals go to Management once every co-host replies.</p>
     </div></div>
 
     <section>
@@ -33,7 +33,7 @@ export async function render(el, ctx) {
       <div class="card">${waiting.length ? html`<div class="rows">${waiting.map((m) => item(m, html`
           <button class="btn btn-sm" data-respond="DECLINE">Decline</button>
           <button class="btn btn-sm btn-primary" data-respond="ACCEPT">${icon('check', 'i-sm')} Accept</button>`))}</div>`
-        : empty('inbox', 'No invites waiting', "When an LHC in your region invites you to co-host, it'll show up here.")}</div>
+        : empty('inbox', 'No invites waiting', ctx.user.role === 'UHC' ? "When another UHC member invites you to co-host, it'll show up here." : "When an LHC in your region invites you to co-host, it'll show up here.")}</div>
     </section>
 
     ${accepted.length ? html`<section class="section">

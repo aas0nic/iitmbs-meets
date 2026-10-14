@@ -26,8 +26,8 @@ function baseCommands() {
     { group: 'Go to', label: 'Meetups', icon: 'calendar', run: go('#/meetups') },
   ];
   if (role === 'MANAGEMENT') cmds.push({ group: 'Go to', label: 'Proposals awaiting decision', icon: 'inbox', run: go('#/meetups?tab=pending') });
+  if (role !== 'MANAGEMENT') cmds.push({ group: 'Go to', label: 'Co-host invites', icon: 'inbox', run: go('#/invites') });
   if (role === 'LHC') {
-    cmds.push({ group: 'Go to', label: 'Co-host invites', icon: 'inbox', run: go('#/invites') });
     cmds.push({ group: 'Go to', label: `Meetups in ${state.user.region_name}`, icon: 'pin', run: go('#/meetups?tab=region') });
   }
   cmds.push(
@@ -35,7 +35,7 @@ function baseCommands() {
     { group: 'Go to', label: 'Insights', icon: 'chart', run: go('#/insights') },
     { group: 'Go to', label: 'Appearance and settings', icon: 'settings', run: go('#/settings') },
   );
-  if (role === 'LHC') cmds.unshift({ group: 'Actions', label: 'New proposal', icon: 'plus', hint: 'Propose a meetup', run: go('#/new') });
+  if (role !== 'MANAGEMENT') cmds.unshift({ group: 'Actions', label: 'New proposal', icon: 'plus', hint: 'Propose a meetup', run: go('#/new') });
   MODES.forEach((m) => cmds.push({ group: 'Theme', label: `${m.label} theme`, icon: m.icon, run: () => { setPrefs({ mode: m.id }); toast(`${m.label} theme`); } }));
   ACCENTS.forEach((a) => cmds.push({ group: 'Theme', label: `Accent: ${a.label}`, icon: 'palette', keep: true, run: () => setPrefs({ accent: a.id }) }));
   return cmds;

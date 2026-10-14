@@ -7,7 +7,7 @@ from flask import Blueprint, abort, jsonify, request
 from ..auth import current_user, login_required
 from ..db import get_db, reset_database, rows
 from .claims import CLAIM_SELECT
-from .common import CATEGORIES, today_iso
+from .common import BUDGET_PER_HEAD, CATEGORIES, today_iso
 from .meetups import list_meetups
 
 bp = Blueprint('overview', __name__, url_prefix='/api')
@@ -21,6 +21,7 @@ def meta():
         regions=rows(db.execute('SELECT id, code, name, states FROM regions ORDER BY id')),
         categories=[{'id': k, 'label': v} for k, v in CATEGORIES.items()],
         today=today_iso(),
+        budget_per_head=BUDGET_PER_HEAD,
     )
 
 
@@ -84,10 +85,12 @@ def _home_uhc(user):
                                  order='m.event_date ASC', limit=8),
         'regions': regions,
         'activity': _recent_activity('m.house_id = ?', [hid]),
+        **{k: v for k, v in _personal(user).items() if k != 'mine'},
     }
 
 
-def _home_lhc(user):
+def _personal(user):
+    """What a proposer (LHC or UHC) personally needs to act on."""
     uid = user['id']
     today = today_iso()
     invites = list_meetups(user, '''m.status IN ('PEER_REVIEW','PENDING','APPROVED') AND EXISTS (
@@ -105,8 +108,29 @@ def _home_lhc(user):
             todo.append({'kind': 'close', 'meetup': m})
         elif m['status'] == 'COMPLETED' and not m['claim_status'] and m['budget_requested'] > 0:
             todo.append({'kind': 'claim', 'meetup': m})
+        elif m['claim_status'] == 'PAYEE_DECLINED':
+            todo.append({'kind': 'repayee', 'meetup': m})
 
-    in_flight = [m for m in mine if m['status'] in ('PEER_REVIEW', 'PENDING')]
+    # Claims where this person was named as the co-host payee and needs to confirm their bank details.
+    for c in rows(get_db().execute('''SELECT c.id, c.meetup_id, m.title, m.event_date, u.name AS claimant_name
+                                      FROM claims c JOIN meetups m ON m.id = c.meetup_id JOIN users u ON u.id = c.claimant_id
+                                      WHERE c.payee_user_id = ? AND c.payout_mode = 'COHOST' AND c.status = 'AWAITING_PAYEE' ''',
+                                   (uid,))):
+        todo.insert(0, {'kind': 'payee', 'meetup': {'id': c['meetup_id'], 'title': c['title'],
+                                                    'event_date': c['event_date'], 'claimant_name': c['claimant_name']}})
+    return {
+        'invites': invites,
+        'todo': todo,
+        'in_flight': [m for m in mine if m['status'] in ('PEER_REVIEW', 'PENDING')],
+        'mine': mine,
+    }
+
+
+def _home_lhc(user):
+    uid = user['id']
+    today = today_iso()
+    p = _personal(user)
+    mine = p.pop('mine')
     upcoming = list_meetups(user, '''m.status = 'APPROVED' AND m.event_date >= ? AND (m.proposer_id = ? OR EXISTS (
         SELECT 1 FROM meetup_invitations i WHERE i.meetup_id = m.id AND i.invitee_id = ? AND i.status = 'ACCEPTED'))''',
                             (today, uid, uid), order='m.event_date ASC')
@@ -114,9 +138,7 @@ def _home_lhc(user):
                                 'AND m.event_date >= ? AND m.proposer_id <> ?',
                           (user['region_id'], today, uid), order='m.event_date ASC', limit=8)
     return {
-        'invites': invites,
-        'todo': todo,
-        'in_flight': in_flight,
+        **p,
         'upcoming': upcoming,
         'region': region,
         'counts': {
@@ -275,11 +297,13 @@ def badges():
     if user['role'] == 'MANAGEMENT':
         out['meetups'] = db.execute("SELECT COUNT(*) FROM meetups WHERE status = 'PENDING'").fetchone()[0]
         out['claims'] = db.execute("SELECT COUNT(*) FROM claims WHERE status = 'PENDING_REVIEW'").fetchone()[0]
-    elif user['role'] == 'LHC':
+    else:
         out['invites'] = db.execute('''
             SELECT COUNT(*) FROM meetup_invitations i JOIN meetups m ON m.id = i.meetup_id
             WHERE i.invitee_id = ? AND i.status = 'INVITED' AND m.status IN ('PEER_REVIEW','PENDING','APPROVED')''',
                                     (user['id'],)).fetchone()[0]
+        out['claims'] = db.execute('''SELECT COUNT(*) FROM claims WHERE payee_user_id = ? AND payout_mode = 'COHOST'
+                                      AND status = 'AWAITING_PAYEE' ''', (user['id'],)).fetchone()[0]
     return jsonify(out)
 
 
@@ -293,3 +317,121 @@ def reset():
     get_db().close()
     reset_database()
     return jsonify(ok=True)
+
+
+# ── Role-specific insights (UHC: their house · LHC: themselves and their region) ──
+
+def _fetch(where='1=1', params=()):
+    return rows(get_db().execute(f'''
+        SELECT m.id, m.proposer_id, m.house_id, m.region_id, m.status, m.category, m.event_date,
+               m.expected_attendees, m.budget_requested, c.actual_attendance, c.amount_claimed,
+               c.amount_approved, c.status AS claim_status
+        FROM meetups m LEFT JOIN claims c ON c.meetup_id = m.id
+        WHERE m.status <> 'DRAFT' AND ({where})''', params))
+
+
+def _tally(items):
+    t = {'total': 0, 'in_review': 0, 'approved': 0, 'completed': 0, 'rejected': 0, 'cancelled': 0, 'reached': 0,
+         'reimbursed': 0}
+    for m in items:
+        t['total'] += 1
+        t['in_review' if m['status'] in ('PEER_REVIEW', 'PENDING') else m['status'].lower()] += 1
+        if m['status'] == 'COMPLETED':
+            t['reached'] += m['actual_attendance'] if m['actual_attendance'] is not None else m['expected_attendees']
+        if m['claim_status'] == 'APPROVED':
+            t['reimbursed'] += m['amount_approved'] or 0
+    decided = t['approved'] + t['completed'] + t['rejected']
+    t['approval_rate'] = round(100 * (t['approved'] + t['completed']) / decided) if decided else None
+    return t
+
+
+def _months(items, n=6):
+    first = date.today().replace(day=1)
+    out = []
+    for back in range(n - 1, -1, -1):
+        y, mo = first.year, first.month - back
+        while mo <= 0:
+            y, mo = y - 1, mo + 12
+        key = f'{y:04d}-{mo:02d}'
+        out.append({'month': key, 'count': sum(1 for m in items if m['event_date'].startswith(key))})
+    return out
+
+
+def _rank(items, key, target):
+    """1-based rank of `target` among groups of `items` by number of meetups held (ties share a rank)."""
+    held = {}
+    for m in items:
+        held.setdefault(m[key], 0)
+        if m['status'] == 'COMPLETED':
+            held[m[key]] += 1
+    mine = held.get(target, 0)
+    return 1 + sum(1 for v in held.values() if v > mine)
+
+
+def _people(user_rows, items):
+    """Per-person activity: proposals, approvals, held, reach, co-hosting."""
+    db = get_db()
+    cohost = {r[0]: r[1] for r in db.execute(
+        "SELECT invitee_id, COUNT(*) FROM meetup_invitations WHERE status = 'ACCEPTED' GROUP BY invitee_id")}
+    out = []
+    for u in user_rows:
+        own = [m for m in items if m['proposer_id'] == u['id']]
+        t = _tally(own)
+        out.append({**u, 'proposed': t['total'], 'approved': t['approved'] + t['completed'], 'held': t['completed'],
+                    'reached': t['reached'], 'cohosted': cohost.get(u['id'], 0),
+                    'last_date': max((m['event_date'] for m in own), default=None)})
+    return sorted(out, key=lambda p: (-p['held'], -p['proposed'], p['name']))
+
+
+@bp.get('/insights/house')
+@login_required('UHC')
+def insights_house():
+    user = current_user()
+    db = get_db()
+    hid = user['house_id']
+    everything = _fetch()
+    house = [m for m in everything if m['house_id'] == hid]
+    regions = rows(db.execute('SELECT id, name, code FROM regions ORDER BY id'))
+    lhcs = rows(db.execute('''SELECT u.id, u.name, u.roll_number, r.name AS region_name, r.code AS region_code
+                              FROM users u JOIN regions r ON r.id = u.region_id
+                              WHERE u.role = 'LHC' AND u.house_id = ? ORDER BY r.id''', (hid,)))
+    return jsonify(
+        house={'id': hid, 'name': user['house_name'], 'slug': user['house_slug']},
+        totals=_tally(house),
+        institute=_tally(everything),
+        rank=_rank(everything, 'house_id', hid),
+        of=db.execute('SELECT COUNT(*) FROM houses').fetchone()[0],
+        by_region=[{**r, **_tally([m for m in house if m['region_id'] == r['id']])} for r in regions],
+        lhcs=_people(lhcs, house),
+        months=_months(house),
+    )
+
+
+@bp.get('/insights/me')
+@login_required('LHC')
+def insights_me():
+    user = current_user()
+    db = get_db()
+    uid, rid = user['id'], user['region_id']
+    everything = _fetch()
+    mine = [m for m in everything if m['proposer_id'] == uid]
+    region = [m for m in everything if m['region_id'] == rid]
+    houses = rows(db.execute('SELECT id, name, slug FROM houses ORDER BY name'))
+    peers = rows(db.execute('''SELECT u.id, u.name, h.name AS house_name, h.slug AS house_slug
+                               FROM users u JOIN houses h ON h.id = u.house_id
+                               WHERE u.role = 'LHC' AND u.region_id = ?''', (rid,)))
+    me = _tally(mine)
+    me['cohosted'] = db.execute("SELECT COUNT(*) FROM meetup_invitations WHERE invitee_id = ? AND status = 'ACCEPTED'",
+                                (uid,)).fetchone()[0]
+    reg = _tally(region)
+    reg['upcoming'] = sum(1 for m in region if m['status'] == 'APPROVED' and m['event_date'] >= today_iso())
+    return jsonify(
+        me=me,
+        region={'id': rid, 'name': user['region_name'], **reg},
+        rank=_rank(everything, 'region_id', rid),
+        of=db.execute('SELECT COUNT(*) FROM regions').fetchone()[0],
+        by_house=[{**h, **_tally([m for m in region if m['house_id'] == h['id']])} for h in houses],
+        peers=_people(peers, region),
+        months=_months(region),
+        my_months=_months(mine),
+    )

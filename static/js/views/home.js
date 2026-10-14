@@ -50,7 +50,7 @@ const ACTIVITY_TEXT = {
   INVITE_ACCEPTED: 'agreed to co-host', INVITE_DECLINED: 'declined to co-host',
   SENT_TO_MANAGEMENT: 'sent to Management', APPROVED: 'approved', REJECTED: 'rejected',
   COMPLETED: 'marked complete', CANCELLED: 'cancelled', COMMENT: 'commented on',
-  CLAIM_FILED: 'filed a claim for', CLAIM_IN_PROGRESS: 'forwarded the claim for', CLAIM_APPROVED: 'paid out the claim for',
+  CLAIM_FILED: 'filed a claim for', CLAIM_PAYEE_CONFIRMED: 'confirmed payout details for', CLAIM_PAYEE_DECLINED: 'declined the payout for', CLAIM_IN_PROGRESS: 'forwarded the claim for', CLAIM_APPROVED: 'paid out the claim for',
   CLAIM_REJECTED: 'rejected the claim for',
 };
 const feed = (items) => items.length
@@ -105,6 +105,41 @@ function management(d, ctx) {
     </div>`;
 }
 
+const TODO = {
+  draft: { icon: 'edit', cls: '', title: 'Finish your draft', cta: 'Continue', href: (m) => `#/meetups/${m.id}/edit` },
+  rejected: { icon: 'alert', cls: 'bad', title: 'Changes requested', cta: 'Revise', href: (m) => `#/meetups/${m.id}` },
+  close: { icon: 'flag', cls: 'ok', title: 'How did it go?', cta: 'Close out', href: (m) => `#/meetups/${m.id}` },
+  claim: { icon: 'receipt', cls: 'accent', title: 'File your reimbursement', cta: 'File claim', href: (m) => `#/meetups/${m.id}/claim` },
+  payee: { icon: 'wallet', cls: 'accent', title: 'Confirm your bank details', cta: 'Review', href: (m) => `#/meetups/${m.id}`, sub: (m) => `${m.claimant_name} wants to reimburse you for ${m.title}` },
+  repayee: { icon: 'wallet', cls: 'bad', title: 'Payee declined — choose another', cta: 'Choose', href: (m) => `#/meetups/${m.id}/claim` },
+};
+
+/** Invites waiting for a reply + the user's own to-dos (shared by LHC and UHC). */
+function attentionCard(d) {
+  const attention = d.invites.length + d.todo.length;
+  if (!attention) return '';
+  return card('Needs your attention', attention, html`<div>
+      ${d.invites.map((m) => html`
+        <div class="task" data-invite="${m.id}">
+          <span class="task-icon accent">${icon('users')}</span>
+          <span class="task-body"><span class="task-title">${m.proposer_name} invited you to co-host</span>
+            <span class="task-sub"><a href="#/meetups/${m.id}" class="link" style="font-weight:500">${m.title}</a> · ${fmtDate(m.event_date)}</span></span>
+          <span class="task-actions">
+            <button class="btn btn-sm" data-respond="DECLINE">Decline</button>
+            <button class="btn btn-sm btn-primary" data-respond="ACCEPT">Accept</button>
+          </span>
+        </div>`)}
+      ${d.todo.map(({ kind, meetup: m }) => {
+        const t = TODO[kind];
+        return html`<div class="task">
+          <span class="task-icon ${t.cls}">${icon(t.icon)}</span>
+          <span class="task-body"><span class="task-title">${t.title}</span><span class="task-sub">${t.sub ? t.sub(m) : `${m.title} · ${fmtDate(m.event_date)}`}</span></span>
+          <span class="task-actions"><a class="btn btn-sm" href="${t.href(m)}">${t.cta}</a></span>
+        </div>`;
+      })}
+    </div>`);
+}
+
 // ── UHC ─────────────────────────────────────────────────────────────────────
 function uhc(d, ctx) {
   const c = d.counts;
@@ -117,6 +152,8 @@ function uhc(d, ctx) {
           <p>${d.house.name} House <span class="sep">${ctx.user.title}, Upper House Council</span></p></div>
       </div>
     </div>
+
+    ${attentionCard(d) ? html`<div style="margin-bottom:24px">${attentionCard(d)}</div>` : ''}
 
     <div class="stats">
       ${stat('In review', inReview, { href: `#/meetups?tab=review&house=${d.house.id}`, note: 'Proposals from your LHCs' })}
@@ -136,7 +173,8 @@ function uhc(d, ctx) {
               <span class="cov-body"><span class="cov-name">${r.name}</span><span class="cov-sub">${r.lhc_name || 'No LHC assigned'}</span></span>
               <span class="cov-n" title="Meetups proposed">${r.meetups}</span>
             </a>`)}</div>`)}
-        ${card('In review', d.in_review.length, d.in_review.length ? rows(d.in_review)
+        ${d.in_flight.length ? card('Your proposals in review', d.in_flight.length, rows(d.in_flight)) : ''}
+        ${card('House proposals in review', d.in_review.length, d.in_review.length ? rows(d.in_review)
           : html`<div class="empty-inline">No ${d.house.name} proposals are in review.</div>`)}
         ${card('Upcoming', d.upcoming.length, d.upcoming.length ? rows(d.upcoming)
           : html`<div class="empty-inline">No approved ${d.house.name} meetups coming up.</div>`, ['Calendar', `#/meetups?tab=upcoming&house=${d.house.id}`])}
@@ -148,13 +186,6 @@ function uhc(d, ctx) {
 }
 
 // ── LHC ─────────────────────────────────────────────────────────────────────
-const TODO = {
-  draft: { icon: 'edit', cls: '', title: 'Finish your draft', cta: 'Continue', href: (m) => `#/meetups/${m.id}/edit` },
-  rejected: { icon: 'alert', cls: 'bad', title: 'Changes requested', cta: 'Revise', href: (m) => `#/meetups/${m.id}` },
-  close: { icon: 'flag', cls: 'ok', title: 'How did it go?', cta: 'Close out', href: (m) => `#/meetups/${m.id}` },
-  claim: { icon: 'receipt', cls: 'accent', title: 'File your reimbursement', cta: 'File claim', href: (m) => `#/meetups/${m.id}?claim=1` },
-};
-
 function lhc(d, ctx) {
   const u = ctx.user;
   const attention = d.invites.length + d.todo.length;
@@ -166,33 +197,14 @@ function lhc(d, ctx) {
       </div>
     </div>
 
-    ${attention ? card('Needs your attention', attention, html`<div>
-      ${d.invites.map((m) => html`
-        <div class="task" data-invite="${m.id}">
-          <span class="task-icon accent">${icon('users')}</span>
-          <span class="task-body"><span class="task-title">${m.proposer_name} invited you to co-host</span>
-            <span class="task-sub"><a href="#/meetups/${m.id}" class="link" style="font-weight:500">${m.title}</a> · ${fmtDate(m.event_date)}</span></span>
-          <span class="task-actions">
-            <button class="btn btn-sm" data-respond="DECLINE">Decline</button>
-            <button class="btn btn-sm btn-primary" data-respond="ACCEPT">Accept</button>
-          </span>
-        </div>`)}
-      ${d.todo.map(({ kind, meetup: m }) => {
-        const t = TODO[kind];
-        return html`<div class="task">
-          <span class="task-icon ${t.cls}">${icon(t.icon)}</span>
-          <span class="task-body"><span class="task-title">${t.title}</span><span class="task-sub">${m.title} · ${fmtDate(m.event_date)}</span></span>
-          <span class="task-actions"><a class="btn btn-sm" href="${t.href(m)}">${t.cta}</a></span>
-        </div>`;
-      })}
-    </div>`) : ''}
+    ${attentionCard(d)}
 
     <div class="${attention ? 'section' : ''}" data-calendar></div>
 
     <div class="grid grid-main section">
       <div class="stack">
         ${card('Your proposals in review', d.in_flight.length, d.in_flight.length ? rows(d.in_flight)
-          : empty('send', 'Nothing in review', 'Propose a meetup and invite LHCs from your region to co-host it.',
+          : empty('send', 'Nothing in review', 'Propose a meetup and invite co-hosts from your region.',
               html`<a class="btn btn-primary btn-sm" href="#/new">${icon('plus')} New proposal</a>`))}
         ${card('Coming up for you', d.upcoming.length, d.upcoming.length ? rows(d.upcoming)
           : html`<div class="empty-inline">No approved meetups you're hosting or co-hosting yet.</div>`)}

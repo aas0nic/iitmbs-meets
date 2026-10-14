@@ -17,13 +17,13 @@ from flask import Blueprint, abort, jsonify, request
 
 from ..auth import current_user, login_required
 from ..db import get_db, one, rows, utcnow
-from .common import (CATEGORIES, INVITES_OPEN, TIME_RE, clean_int, clean_text, get_visible_meetup,
+from .common import (BUDGET_PER_HEAD, CATEGORIES, PROPOSER_ROLES, INVITES_OPEN, TIME_RE, clean_int, clean_text, get_visible_meetup,
                      house_uhc_ids, log_activity, management_ids, notify, today_iso, visibility_clause)
 
 bp = Blueprint('meetups', __name__, url_prefix='/api')
 
 LIST_SELECT = '''
-    SELECT m.id, m.title, m.category, m.event_date, m.start_time, m.end_time, m.venue,
+    SELECT m.id, m.title, m.category, m.event_date, m.backup_date, m.start_time, m.end_time, m.venue,
            m.expected_attendees, m.budget_requested, m.status, m.submitted_at, m.reviewed_at, m.created_at,
            m.proposer_id, p.name AS proposer_name,
            m.house_id, h.name AS house_name, h.slug AS house_slug, h.color AS house_color,
@@ -82,7 +82,7 @@ def require(m, user, action):
 
 # ── Validation ──────────────────────────────────────────────────────────────
 
-def parse_payload(data, for_submit):
+def parse_payload(data, for_submit, user):
     title = clean_text(data.get('title'), 'Title', 4, 120)
     description = clean_text(data.get('description'), 'Description', 20, 4000)
     category = data.get('category')
@@ -91,9 +91,15 @@ def parse_payload(data, for_submit):
     try:
         event_date = date.fromisoformat(data.get('event_date') or '').isoformat()
     except ValueError:
-        abort(400, 'Pick a valid date.')
-    if for_submit and event_date <= today_iso():
-        abort(400, 'The meetup date must be in the future.')
+        abort(400, 'Pick a valid preferred date.')
+    try:
+        backup_date = date.fromisoformat(data.get('backup_date') or '').isoformat()
+    except ValueError:
+        abort(400, 'Pick a backup date.')
+    if backup_date == event_date:
+        abort(400, 'The backup date must be different from the preferred date.')
+    if for_submit and (event_date <= today_iso() or backup_date <= today_iso()):
+        abort(400, 'Meetup dates must be in the future.')
 
     start, end = data.get('start_time') or '', data.get('end_time') or ''
     if not TIME_RE.match(start) or not TIME_RE.match(end):
@@ -102,33 +108,82 @@ def parse_payload(data, for_submit):
         abort(400, 'End time must be after the start time.')
 
     venue = clean_text(data.get('venue'), 'Venue', 4, 300)
+    attendees = clean_int(data.get('expected_attendees'), 'Expected attendance', 1, 2000)
+    extra = clean_int(data.get('extra_budget') or 0, 'Extra budget', 0, 500000)
+    extra_note = clean_text(data.get('extra_budget_note'), 'Reason for extra budget', 5, 1000, required=extra > 0)
+    if not extra:
+        extra_note = None
+
+    # LHCs always propose for their own region; UHC members can pick any region.
+    if user['role'] == 'UHC':
+        region_id = clean_int(data.get('region_id'), 'Region', 1, 10_000)
+        if not get_db().execute('SELECT 1 FROM regions WHERE id = ?', (region_id,)).fetchone():
+            abort(400, 'Choose a region.')
+    else:
+        region_id = user['region_id']
 
     return {
         'title': title,
         'description': description,
         'category': category,
         'event_date': event_date,
+        'backup_date': backup_date,
         'start_time': start,
         'end_time': end,
         'venue': venue,
-        'expected_attendees': clean_int(data.get('expected_attendees'), 'Expected attendance', 1, 2000),
-        'budget_requested': clean_int(data.get('budget_requested') or 0, 'Budget', 0, 500000),
-        'budget_breakdown': clean_text(data.get('budget_breakdown'), 'Budget breakdown', 0, 2000, required=False),
+        'expected_attendees': attendees,
+        'budget_per_head': BUDGET_PER_HEAD,
+        'extra_budget': extra,
+        'extra_budget_note': extra_note,
+        'budget_requested': BUDGET_PER_HEAD * attendees + extra,
+        'region_id': region_id,
+        **parse_collab(data),
     }
 
 
+def parse_collab(data):
+    """Collaboration block: nothing for NONE; name/plan/contact for both kinds; more for external bodies."""
+    kind = data.get('collab_type') or 'NONE'
+    if kind not in ('NONE', 'SOCIETY', 'EXTERNAL'):
+        abort(400, 'Choose whether this meetup is a collaboration.')
+    out = {'collab_type': kind, 'collab_name': None, 'collab_about': None, 'collab_agenda': None,
+           'collab_contact': None, 'collab_sponsored': None, 'collab_sponsorship': None}
+    if kind == 'NONE':
+        return out
+    who = 'Society' if kind == 'SOCIETY' else 'Organisation'
+    out['collab_name'] = clean_text(data.get('collab_name'), f'{who} name', 2, 150)
+    out['collab_agenda'] = clean_text(data.get('collab_agenda'), 'Collaboration plan', 10, 2000)
+    out['collab_contact'] = clean_text(data.get('collab_contact'), 'Point of contact', 4, 200)
+    if kind == 'EXTERNAL':
+        out['collab_about'] = clean_text(data.get('collab_about'), 'About the organisation', 10, 1000)
+        sponsored = data.get('collab_sponsored')
+        if sponsored not in ('yes', 'no'):
+            abort(400, 'Say whether the organisation is sponsoring the meetup.')
+        out['collab_sponsored'] = 1 if sponsored == 'yes' else 0
+        if out['collab_sponsored']:
+            out['collab_sponsorship'] = clean_text(data.get('collab_sponsorship'), 'Sponsorship details', 10, 1000)
+    return out
+
+
+def invitable_clause(host):
+    """Who `host` may invite: LHC → LHCs of the same region; UHC → other UHC members (any house)."""
+    if host['role'] == 'UHC':
+        return "u.role = 'UHC' AND u.id <> ?", [host['id']]
+    return "u.role = 'LHC' AND u.region_id = ? AND u.id <> ?", [host['region_id'], host['id']]
+
+
 def _sync_invitations(meetup_id, host, invitee_ids):
-    """Make the invitation set match `invitee_ids`. Enforces the regional peer rule."""
+    """Make the invitation set match `invitee_ids`, enforcing who the host may invite."""
     db = get_db()
     wanted = [i for i in dict.fromkeys(invitee_ids or []) if i and i != host['id']]
     if wanted:
+        clause, params = invitable_clause(host)
         marks = ','.join('?' * len(wanted))
-        valid = {r[0] for r in db.execute(
-            f"SELECT id FROM users WHERE role = 'LHC' AND region_id = ? AND id IN ({marks})",
-            [host['region_id'], *wanted])}
-        invalid = [i for i in wanted if i not in valid]
-        if invalid:
-            abort(400, 'You can only invite LHCs from your own region.')
+        valid = {r[0] for r in db.execute(f'SELECT u.id FROM users u WHERE {clause} AND u.id IN ({marks})',
+                                          [*params, *wanted])}
+        if any(i not in valid for i in wanted):
+            abort(400, 'UHC members can only invite other UHC members.' if host['role'] == 'UHC'
+                  else 'You can only invite LHCs from your own region.')
     existing = {r['invitee_id']: r['status'] for r in db.execute(
         'SELECT invitee_id, status FROM meetup_invitations WHERE meetup_id = ?', (meetup_id,))}
     removed = [i for i in existing if i not in wanted]
@@ -150,14 +205,15 @@ def _submit(m, host, resubmit):
                       review_comments = NULL, reviewed_by = NULL, reviewed_at = NULL
                   WHERE id = ?''', (new_status, utcnow(), utcnow(), m['id']))
     log_activity(m['id'], host['id'], 'RESUBMITTED' if resubmit else 'SUBMITTED')
+    region = db.execute('SELECT name FROM regions WHERE id = ?', (m['region_id'],)).fetchone()[0]
     if waiting:
         notify(waiting, 'Co-host invitation',
                f'{host["name"]} invited you to co-host "{m["title"]}".', m['id'])
     if new_status == 'PENDING':
         notify(management_ids(), 'New proposal to review',
-               f'"{m["title"]}" from {host["region_name"]} is waiting for a decision.', m['id'])
+               f'"{m["title"]}" from {region} is waiting for a decision.', m['id'])
     notify(house_uhc_ids(m['house_id']), f'New {host["house_name"]} proposal',
-           f'{host["name"]} ({host["region_name"]}) {"re" if resubmit else ""}submitted "{m["title"]}".', m['id'])
+           f'{host["name"]} ({region}) {"re" if resubmit else ""}submitted "{m["title"]}".', m['id'])
     return new_status
 
 
@@ -244,12 +300,8 @@ def show(meetup_id):
         FROM meetup_activity a LEFT JOIN users u ON u.id = a.actor_id
         WHERE a.meetup_id = ? ORDER BY a.created_at, a.id''', (meetup_id,)))
 
-    claim = one(db.execute('''
-        SELECT c.*, rv.name AS reviewer_name FROM claims c LEFT JOIN users rv ON rv.id = c.reviewed_by
-        WHERE c.meetup_id = ?''', (meetup_id,)).fetchone())
-    if claim:
-        claim['files'] = rows(db.execute(
-            'SELECT id, original_name, size_bytes FROM claim_files WHERE claim_id = ?', (claim['id'],)))
+    from .claims import claim_for_meetup  # local import: claims depends on common/profile only
+    claim = claim_for_meetup(meetup_id, user)
 
     m['category_label'] = CATEGORIES[m['category']]
     return jsonify(meetup=m, invitations=invitations, my_invitation=my_invite, activity=activity, claim=claim,
@@ -257,33 +309,34 @@ def show(meetup_id):
 
 
 @bp.get('/peers')
-@login_required('LHC')
+@login_required(*PROPOSER_ROLES)
 def peers():
-    """LHCs in the current user's region — the only people they may invite."""
+    """The people the current user may invite as co-hosts."""
     user = current_user()
-    return jsonify(peers=rows(get_db().execute('''
-        SELECT u.id, u.name, u.roll_number, h.id AS house_id, h.name AS house_name, h.slug AS house_slug,
+    clause, params = invitable_clause(user)
+    return jsonify(peers=rows(get_db().execute(f'''
+        SELECT u.id, u.name, u.roll_number, u.title, h.id AS house_id, h.name AS house_name, h.slug AS house_slug,
                h.color AS house_color
         FROM users u JOIN houses h ON h.id = u.house_id
-        WHERE u.role = 'LHC' AND u.region_id = ? AND u.id <> ?
-        ORDER BY h.name''', (user['region_id'], user['id']))), region_name=user['region_name'])
+        WHERE {clause}
+        ORDER BY h.name, u.name''', params)), region_name=user['region_name'])
 
 
 # ── Write ───────────────────────────────────────────────────────────────────
 
 @bp.post('/meetups')
-@login_required('LHC')
+@login_required(*PROPOSER_ROLES)
 def create():
     user = current_user()
     data = request.get_json(silent=True) or {}
     submit = bool(data.get('submit'))
-    fields = parse_payload(data, for_submit=submit)
+    fields = parse_payload(data, for_submit=submit, user=user)
     db = get_db()
     now = utcnow()
-    cur = db.execute(f'''INSERT INTO meetups ({', '.join(fields)}, proposer_id, house_id, region_id, status,
+    cur = db.execute(f'''INSERT INTO meetups ({', '.join(fields)}, proposer_id, house_id, status,
                              created_at, updated_at)
-                         VALUES ({', '.join('?' * len(fields))}, ?, ?, ?, 'DRAFT', ?, ?)''',
-                     [*fields.values(), user['id'], user['house_id'], user['region_id'], now, now])
+                         VALUES ({', '.join('?' * len(fields))}, ?, ?, 'DRAFT', ?, ?)''',
+                     [*fields.values(), user['id'], user['house_id'], now, now])
     meetup_id = cur.lastrowid
     log_activity(meetup_id, user['id'], 'CREATED')
     _sync_invitations(meetup_id, user, data.get('invitee_ids'))
@@ -295,14 +348,14 @@ def create():
 
 
 @bp.put('/meetups/<int:meetup_id>')
-@login_required('LHC')
+@login_required(*PROPOSER_ROLES)
 def update(meetup_id):
     user = current_user()
     m = get_visible_meetup(meetup_id, user)
     require(m, user, 'edit')
     data = request.get_json(silent=True) or {}
     submit = bool(data.get('submit'))
-    fields = parse_payload(data, for_submit=submit)
+    fields = parse_payload(data, for_submit=submit, user=user)
     db = get_db()
     db.execute(f"UPDATE meetups SET {', '.join(f'{k} = ?' for k in fields)}, updated_at = ? WHERE id = ?",
                [*fields.values(), utcnow(), meetup_id])
@@ -317,7 +370,7 @@ def update(meetup_id):
 
 
 @bp.delete('/meetups/<int:meetup_id>')
-@login_required('LHC')
+@login_required(*PROPOSER_ROLES)
 def destroy(meetup_id):
     user = current_user()
     m = get_visible_meetup(meetup_id, user)
@@ -329,7 +382,7 @@ def destroy(meetup_id):
 
 
 @bp.post('/meetups/<int:meetup_id>/submit')
-@login_required('LHC')
+@login_required(*PROPOSER_ROLES)
 def submit(meetup_id):
     user = current_user()
     m = get_visible_meetup(meetup_id, user)
@@ -342,7 +395,7 @@ def submit(meetup_id):
 
 
 @bp.post('/meetups/<int:meetup_id>/send-to-management')
-@login_required('LHC')
+@login_required(*PROPOSER_ROLES)
 def send_to_management(meetup_id):
     user = current_user()
     m = get_visible_meetup(meetup_id, user)
@@ -353,7 +406,7 @@ def send_to_management(meetup_id):
 
 
 @bp.post('/meetups/<int:meetup_id>/withdraw')
-@login_required('LHC')
+@login_required(*PROPOSER_ROLES)
 def withdraw(meetup_id):
     user = current_user()
     m = get_visible_meetup(meetup_id, user)
@@ -379,6 +432,16 @@ def review(meetup_id):
     status = 'APPROVED' if decision == 'APPROVE' else 'REJECTED'
     db = get_db()
     now = utcnow()
+    if decision == 'APPROVE' and data.get('date_choice') == 'BACKUP':
+        if not m['backup_date']:
+            abort(400, 'This proposal has no backup date.')
+        if m['backup_date'] <= today_iso():
+            abort(400, 'The backup date has already passed.')
+        # The approved date becomes the meetup's date; the other is kept as the alternate.
+        db.execute('UPDATE meetups SET event_date = ?, backup_date = ? WHERE id = ?',
+                   (m['backup_date'], m['event_date'], meetup_id))
+        comments = f"Approved for the backup date. {comments or ''}".strip()
+        m = {**m, 'event_date': m['backup_date']}
     db.execute('UPDATE meetups SET status = ?, review_comments = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ? '
                'WHERE id = ?', (status, comments, user['id'], now, now, meetup_id))
     log_activity(meetup_id, user['id'], status, comments)
@@ -446,7 +509,7 @@ def comment(meetup_id):
 
 
 @bp.post('/invitations/<int:meetup_id>/respond')
-@login_required('LHC')
+@login_required(*PROPOSER_ROLES)
 def respond(meetup_id):
     """Accept/decline a co-host invite. Keyed by meetup id: one invite per (meetup, user)."""
     user = current_user()

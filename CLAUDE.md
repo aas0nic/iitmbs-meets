@@ -1,5 +1,14 @@
 # CLAUDE.md — Instructions for Claude AI Assistant
 
+## ⚠️ MANDATORY: Read PROJECT.md first, and keep it updated
+
+> [!IMPORTANT]
+> **[`PROJECT.md`](PROJECT.md) is the living reference for this codebase** — product, every business rule,
+> architecture, routes, data model, design system, gotchas, how to verify, and a dated change log.
+> Read it before any change. **Every change that touches a feature, rule, schema, API or UI convention must
+> update `PROJECT.md` in the same change** (relevant section + a dated line in its change log).
+> Verify with `node tools/e2e.mjs` (extend it for new workflows) and `node tools/shoot.mjs` for screenshots.
+
 ## ⚠️ MANDATORY: Refer to WORKFLOW.md for System Truth
 
 > [!IMPORTANT]
@@ -47,10 +56,18 @@ The **IIT Madras BS Degree Meetup Approval Portal** is an institutional governan
    - Each LHC belongs to **1 House** and is physically located in **1 Geographic Region** (~12 LHCs per region).
 
 ### 2.3 Strict Business Constraints (Do NOT violate)
-- **Regional Peer Co-Hosting Rule**: When an LHC proposes a meetup, they can **ONLY** invite fellow LHC members from their **exact same geographic region** (`region_id`), regardless of house. Cross-region LHC invites are disallowed.
+- **Regional Peer Co-Hosting Rule**: When an LHC proposes a meetup, they can **ONLY** invite fellow LHC members from their **exact same geographic region** (`region_id`), regardless of house. Cross-region LHC invites are disallowed. (UHC proposers invite UHC members instead — see below.)
 - **Peer Review Threshold**: If peer invites are issued, the meetup stays in `PEER_REVIEW` until peers accept/decline, or the host fast-forwards submission to Management review (`PENDING`).
 - **Management Feedback**: Rejection by Management requires mandatory explanation text stored in `review_comments`.
+- **UHC Proposals**: UHC members can also propose meetups, in **any** of the 10 regions (they pick `region_id`), and can only invite **other UHC members** (any house) as co-hosts. LHCs still propose for their own region and invite same-region LHCs. See `invitable_clause()` in `portal/api/meetups.py`.
+- **Collaboration**: `collab_type` is `NONE`, `SOCIETY` (IITM BS society) or `EXTERNAL` (outside body). For SOCIETY/EXTERNAL, name, plan/agenda and point of contact are mandatory; EXTERNAL also requires "about the organisation" and a sponsorship yes/no, with details when yes.
+- **Mandatory Fields**: Every proposal field is required (including the backup date) except co-hosts and the collaboration block. The form validates client-side, marks each missing field inline and scrolls/focuses to the first; the server re-validates everything.
+- **Payout Details**: LHC/UHC members can save default bank details (`payout_details` table, `/api/me/payout`).
+- **Claims**: filed on a full page (`#/meetups/:id/claim`) with an attendee list (manual or CSV/XLSX import via `/api/attendees/parse`), amount suggested at ₹200 × attendees (overrun allowed), receipts, a post link, and a payee: SELF (saved back to profile), OTHER (typed details), or COHOST (accepted co-host from another house; their saved details are hidden from the claimant and they must confirm before Management sees the claim). Bank fields are only returned to Management, the payee, and the claimant for SELF/OTHER (`claims.present()`).
+- **Insights per role**: Management → institute-wide (`/api/stats`); UHC → own house (`/api/insights/house`); LHC → self + region (`/api/insights/me`).
 - **Offline Only**: Every meetup is held in person at a physical venue (`venue` is required). There is no online/hybrid mode.
+- **Dates**: A proposal has a preferred date (`event_date`) and an optional backup date (`backup_date`). When approving, Management picks one; choosing the backup swaps the two so `event_date` is always the date on the calendar.
+- **Budget**: Standard allowance is ₹200 × expected attendees (`BUDGET_PER_HEAD` in `portal/api/common.py`, mirrored in `portal/seed.py`). Hosts may request `extra_budget` on top (e.g. venue booking for large meetups) with a mandatory `extra_budget_note`. `budget_requested` = allowance + extra and is computed server-side, never taken from the client.
 - **Reimbursement Eligibility**: Only `APPROVED` or `COMPLETED` meetups can file expense claims with bill receipts.
 
 ---

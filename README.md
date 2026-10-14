@@ -1,4 +1,4 @@
-# IIT Madras BS — Student Activities Meetup Approval Portal
+# Meetup Planner — IIT Madras BS Degree
 
 A web application built for the **IIT Madras BS Degree Student Community**, designed to manage regional student meetups across **12 Houses** and **10 Geographic Regions** with governance by **Management**, **Upper House Council (UHC)**, and **Lower House Council (LHC)**.
 
@@ -11,6 +11,7 @@ Styled faithfully in alignment with the official **IIT Madras Student Activities
 For the full architectural breakdown, role access control matrices, Mermaid lifecycle diagrams, SQLite schemas, and REST API specifications, please refer to:
 
 👉 **[WORKFLOW.md](WORKFLOW.md)** — Architectural specification, RBAC matrix, database schema, and API contracts.  
+👉 **[PROJECT.md](PROJECT.md)** — Living project reference: rules, architecture, data model, design system, how to verify, change log.  
 👉 **[CLAUDE.md](CLAUDE.md)** — Direct instructions, constraints, and development guidelines for Claude AI.
 
 ---

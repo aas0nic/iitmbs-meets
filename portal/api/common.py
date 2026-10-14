@@ -16,6 +16,12 @@ CATEGORIES = {
     'SPORTS': 'Sports',
 }
 
+# Standard allowance per expected attendee (₹). Extra budget (e.g. venue booking) is requested separately.
+BUDGET_PER_HEAD = 200
+
+# Roles that can propose, co-host and claim.
+PROPOSER_ROLES = ('LHC', 'UHC')
+
 # Statuses a meetup can be in when its co-host invitations are live.
 INVITES_OPEN = ('PEER_REVIEW', 'PENDING', 'APPROVED')
 
@@ -34,7 +40,7 @@ def visibility_clause(user, alias='m'):
     submitted in their own region, and approved/completed meetups anywhere.
     """
     if user['role'] in ('MANAGEMENT', 'UHC'):
-        return f"{alias}.status <> 'DRAFT'", []
+        return f"({alias}.status <> 'DRAFT' OR {alias}.proposer_id = ?)", [user['id']]
     return (
         f"""({alias}.proposer_id = ?
             OR ({alias}.status <> 'DRAFT' AND (
@@ -95,3 +101,26 @@ def clean_int(value, field, lo, hi):
     if not lo <= n <= hi:
         abort(400, f'{field} must be between {lo:,} and {hi:,}.')
     return n
+
+
+# ── Bank details (profile + claims) ─────────────────────────────────────────
+IFSC_RE = re.compile(r'^[A-Z]{4}0[A-Z0-9]{6}$')
+ACCOUNT_RE = re.compile(r'^\d{9,18}$')
+UPI_RE = re.compile(r'^[\w.\-]{2,256}@[A-Za-z][A-Za-z0-9.]{1,63}$')
+EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+
+def parse_bank(data, holder_label='Account holder name'):
+    """Validate a bank block → {payee_name, bank_name, account_number, ifsc, upi_id}."""
+    holder = clean_text(data.get('payee_name') or data.get('account_holder'), holder_label, 2, 120)
+    bank = clean_text(data.get('bank_name'), 'Bank name', 2, 120)
+    account = re.sub(r'[\s-]', '', str(data.get('account_number') or ''))
+    if not ACCOUNT_RE.match(account):
+        abort(400, 'Account number should be 9 to 18 digits.')
+    ifsc = str(data.get('ifsc') or '').strip().upper()
+    if not IFSC_RE.match(ifsc):
+        abort(400, 'IFSC should look like SBIN0001234 (4 letters, 0, then 6 letters or digits).')
+    upi = str(data.get('upi_id') or '').strip() or None
+    if upi and not UPI_RE.match(upi):
+        abort(400, 'UPI ID should look like name@bank.')
+    return {'payee_name': holder, 'bank_name': bank, 'account_number': account, 'ifsc': ifsc, 'upi_id': upi}
