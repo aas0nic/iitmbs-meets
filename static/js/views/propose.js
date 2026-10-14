@@ -40,7 +40,7 @@ export async function render(el, ctx) {
       <h1 class="page-title">${editId ? (rejected ? 'Revise and resubmit' : 'Edit draft') : 'Propose a meetup'}</h1>
       <p class="page-sub">${isUhc
         ? `UHC proposal · ${u.house_name} House. You can hold it in any region.`
-        : `For ${u.region_name} region · ${u.house_name} House.`} Management reviews every proposal before it goes ahead.</p>
+        : `For ${u.region_name} region · ${u.house_name} House.`} Administration reviews every proposal before it goes ahead.</p>
     </div></div>
 
     ${rejected && m.review_comments ? html`<div class="callout is-bad" style="margin-bottom:20px">
@@ -66,7 +66,7 @@ export async function render(el, ctx) {
       </section>
 
       <section class="form-section">
-        <div class="form-section-head"><h3>When and where</h3><p>All meetups are offline. Give a preferred and a backup date; Management approves one of them.</p></div>
+        <div class="form-section-head"><h3>When and where</h3><p>All meetups are offline. Give a preferred and a backup date; Administration approves one of them.</p></div>
         <div class="form-section-body">
           <div class="field-row keep">
             <label class="field" data-field="event_date"><span class="field-label">Preferred date</span><input class="input" type="date" name="event_date" min="${minDate}" value="${m.event_date || ''}"></label>
@@ -162,7 +162,7 @@ export async function render(el, ctx) {
       </section>
 
       <div class="form-footer">
-        <span class="hint">${rejected ? 'Resubmitting sends it back to Management.' : 'Drafts are only visible to you.'}</span>
+        <span class="hint">${rejected ? 'Resubmitting sends it back to Administration.' : 'Drafts are only visible to you.'}</span>
         ${rejected ? '' : html`<button type="button" class="btn" data-save="draft">Save draft</button>`}
         <button type="button" class="btn btn-primary" data-save="submit">${icon('send', 'i-sm')} ${rejected ? 'Resubmit' : 'Submit proposal'}</button>
       </div>
@@ -255,7 +255,7 @@ export async function render(el, ctx) {
         const res = editId ? await api.put(`/api/meetups/${editId}`, body) : await api.post('/api/meetups', body);
         toast(!submit ? 'Draft saved.'
           : res.status === 'PEER_REVIEW' ? `Submitted. ${body.invitee_ids.length} co-host invite${body.invitee_ids.length === 1 ? '' : 's'} sent.`
-            : 'Submitted to Management.');
+            : 'Submitted to Administration.');
         ctx.refreshBadges();
         location.hash = `#/meetups/${res.id}`;
       } catch (e) {

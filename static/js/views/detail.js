@@ -50,7 +50,7 @@ function page(d, ctx) {
 }
 
 function steps(m, invitations) {
-  const labels = ['Draft', invitations.length ? 'Co-hosts' : 'No co-hosts', 'Management', 'Approved', 'Held'];
+  const labels = ['Draft', invitations.length ? 'Co-hosts' : 'No co-hosts', 'Administration', 'Approved', 'Held'];
   let done = { DRAFT: 0, PEER_REVIEW: 1, PENDING: 2, APPROVED: 4, COMPLETED: 5, REJECTED: 2, CANCELLED: m.reviewed_at ? 4 : 2 }[m.status];
   let failAt = m.status === 'REJECTED' ? 2 : m.status === 'CANCELLED' ? done : -1;
   if (failAt >= 0) labels[failAt] = m.status === 'REJECTED' ? 'Rejected' : 'Cancelled';
@@ -115,7 +115,7 @@ const TL = {
   WITHDRAWN: ['rotate', '', 'withdrew it back to draft'],
   INVITE_ACCEPTED: ['check', 'ok', 'agreed to co-host'],
   INVITE_DECLINED: ['x', '', 'declined to co-host'],
-  SENT_TO_MANAGEMENT: ['arrow-right', 'accent', 'sent to Management'],
+  SENT_TO_ADMINISTRATION: ['arrow-right', 'accent', 'sent to Administration'],
   APPROVED: ['check', 'ok', 'approved the proposal'],
   REJECTED: ['x', 'bad', 'rejected the proposal'],
   COMPLETED: ['flag', 'ok', 'marked the meetup as held'],
@@ -130,7 +130,7 @@ const TL = {
 };
 
 function timeline(d) {
-  const roleTag = (a) => (a.actor_role === 'MANAGEMENT' ? html` <span class="tag">Management</span>` : a.actor_role === 'UHC' ? html` <span class="tag">UHC</span>` : '');
+  const roleTag = (a) => (a.actor_role === 'ADMINISTRATION' ? html` <span class="tag">Administration</span>` : a.actor_role === 'UHC' ? html` <span class="tag">UHC</span>` : '');
   return html`<section class="card" id="activity">
     <header class="card-head"><h2 class="card-title">Activity</h2><span class="count">${d.activity.length}</span></header>
     <ol class="timeline">
@@ -254,7 +254,7 @@ function actionPanel(d, ctx) {
     blocks.push(mine.status === 'INVITED'
       ? html`<form class="action-panel" data-respond-form>
           <h3>${m.proposer_name} invited you to co-host</h3>
-          <p>Co-hosts help run the day and are listed on the proposal Management reviews.</p>
+          <p>Co-hosts help run the day and are listed on the proposal Administration reviews.</p>
           <textarea class="textarea" name="note" rows="2" placeholder="Optional note to the host"></textarea>
           <div class="btn-row">
             <button class="btn" type="button" data-respond="DECLINE">Decline</button>
@@ -272,16 +272,16 @@ function actionPanel(d, ctx) {
     const host = {
       DRAFT: [
         'This is a draft',
-        invitations.length ? `Submitting sends invites to ${plural(invitations.length, 'co-host')}. Once they reply it goes to Management.` : 'Submitting sends it straight to Management.',
+        invitations.length ? `Submitting sends invites to ${plural(invitations.length, 'co-host')}. Once they reply it goes to Administration.` : 'Submitting sends it straight to Administration.',
         [['primary', 'submit', 'send', 'Submit proposal'], ['', 'edit', 'edit', 'Edit'], ['danger', 'delete', 'trash', 'Delete draft']],
       ],
       PEER_REVIEW: [
         `Waiting on ${plural(waiting, 'co-host')}`,
-        `${accepted} accepted${declined ? `, ${declined} declined` : ''}. It moves to Management automatically when everyone replies, or you can send it now.`,
-        [['primary', 'send_to_management', 'arrow-right', 'Send to Management now'], ['', 'withdraw', 'rotate', 'Withdraw to draft']],
+        `${accepted} accepted${declined ? `, ${declined} declined` : ''}. It moves to Administration automatically when everyone replies, or you can send it now.`,
+        [['primary', 'send_to_administration', 'arrow-right', 'Send to Administration now'], ['', 'withdraw', 'rotate', 'Withdraw to draft']],
       ],
       PENDING: [
-        'With Management',
+        'With Administration',
         'A reviewer will approve it or send it back with feedback. You will get a notification either way.',
         [['', 'withdraw', 'rotate', 'Withdraw to draft']],
       ],
@@ -301,7 +301,7 @@ function actionPanel(d, ctx) {
       ],
       COMPLETED: d.claim ? null : m.budget_requested ? [
         'File your claim',
-        'Attach bills and an attendance record. Management verifies them before payout.',
+        'Attach bills and an attendance record. Administration verifies them before payout.',
         [['primary', 'file_claim', 'receipt', 'File reimbursement claim']],
       ] : null,
     }[m.status];
@@ -314,7 +314,7 @@ function actionPanel(d, ctx) {
     }
   }
 
-  if (ctx.user.role === 'MANAGEMENT' && can.complete) {
+  if (ctx.user.role === 'ADMINISTRATION' && can.complete) {
     blocks.push(html`<div class="action-panel"><h3>Close out</h3>
       <p>${daysUntil(m.event_date) <= 0 ? 'The date has passed.' : 'Scheduled for later.'} Mark it as held so the host can file a claim.</p>
       <button class="btn btn-block" data-act="complete">${icon('flag', 'i-sm')} Mark as held</button></div>`);
@@ -327,8 +327,8 @@ function actionPanel(d, ctx) {
   if (!blocks.length) {
     const msg = {
       DRAFT: 'Only the host can see this draft.',
-      PEER_REVIEW: 'Waiting for co-hosts to reply before it goes to Management.',
-      PENDING: 'Waiting for a Management decision.',
+      PEER_REVIEW: 'Waiting for co-hosts to reply before it goes to Administration.',
+      PENDING: 'Waiting for an Administration decision.',
       APPROVED: 'Approved and on the calendar.',
       REJECTED: 'Sent back to the host with feedback.',
       COMPLETED: 'This meetup has taken place.',
@@ -389,7 +389,7 @@ function bind(el, d, ctx) {
     }
     const calls = {
       submit: [`${base}/submit`, 'Submitted.'],
-      send_to_management: [`${base}/send-to-management`, 'Sent to Management.'],
+      send_to_administration: [`${base}/send-to-administration`, 'Sent to Administration.'],
       withdraw: [`${base}/withdraw`, 'Withdrawn to draft. You can edit it now.'],
       complete: [`${base}/complete`, 'Marked as held.'],
     };
@@ -411,7 +411,7 @@ function bind(el, d, ctx) {
     }
     busy(btn, async () => {
       await api.post(`/api/claims/${d.claim.id}/payee-response`, { decision, note });
-      done(decision === 'CONFIRM' ? 'Confirmed. The claim is now with Management.' : 'Declined. The host has been notified.');
+      done(decision === 'CONFIRM' ? 'Confirmed. The claim is now with Administration.' : 'Declined. The host has been notified.');
     });
   });
 

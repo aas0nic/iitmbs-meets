@@ -35,11 +35,11 @@ def today_iso():
 def visibility_clause(user, alias='m'):
     """SQL predicate (and params) limiting meetups to what `user` may see.
 
-    Management and UHC see every submitted meetup. An LHC sees their own
+    Administration and UHC see every submitted meetup. An LHC sees their own
     meetups (drafts included), meetups they're invited to, everything
     submitted in their own region, and approved/completed meetups anywhere.
     """
-    if user['role'] in ('MANAGEMENT', 'UHC'):
+    if user['role'] in ('ADMINISTRATION', 'UHC'):
         return f"({alias}.status <> 'DRAFT' OR {alias}.proposer_id = ?)", [user['id']]
     return (
         f"""({alias}.proposer_id = ?
@@ -69,12 +69,13 @@ def notify(user_ids, title, body, meetup_id=None):
         [(uid, title, body, meetup_id, now) for uid in dict.fromkeys(user_ids) if uid])
 
 
-def management_ids():
-    return [r[0] for r in get_db().execute("SELECT id FROM users WHERE role = 'MANAGEMENT'")]
+def administration_ids():
+    return [r[0] for r in get_db().execute("SELECT id FROM users WHERE role = 'ADMINISTRATION' AND is_active = 1")]
 
 
 def house_uhc_ids(house_id):
-    return [r[0] for r in get_db().execute("SELECT id FROM users WHERE role = 'UHC' AND house_id = ?", (house_id,))]
+    return [r[0] for r in get_db().execute(
+        "SELECT id FROM users WHERE role = 'UHC' AND house_id = ? AND is_active = 1", (house_id,))]
 
 
 def log_activity(meetup_id, actor_id, action, note=None):

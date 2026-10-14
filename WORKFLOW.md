@@ -12,7 +12,7 @@ The **IITM BS Meetup Approval Portal** is a student activities governance platfo
 ### Core Objectives
 1. **Decentralized Regional Meetup Organization**: Empower Lower House Council (LHC) representatives to organize local meetups for their regional student cohorts.
 2. **Cross-House Regional Collaboration**: Allow proposing LHCs to invite and collaborate with fellow LHC members belonging to their **same geographic region**, regardless of house affiliation.
-3. **Centralized Institutional Review**: Provide the Management team with an approval queue to verify safety, logistics, venue feasibility, and policy adherence before any meetup is authorized.
+3. **Centralized Institutional Review**: Provide the Administration team with an approval queue to verify safety, logistics, venue feasibility, and policy adherence before any meetup is authorized.
 4. **Automated Status Notifications**: Keep proposers and co-hosts notified when a proposal is submitted, peer-accepted, approved, or rejected with feedback.
 
 ---
@@ -25,7 +25,7 @@ The student governance system operates across two orthogonal axes:
 
 ```
                               ┌────────────────────────────────────────┐
-                              │          🏛️ MANAGEMENT TIER            │
+                              │          🏛️ ADMINISTRATION TIER            │
                               │   (Dean, SAC, Activities Council)      │
                               │      Final Approval & Oversight        │
                               └───────────────────┬────────────────────┘
@@ -62,7 +62,7 @@ The student governance system operates across two orthogonal axes:
 
 | Tier | Total Count | House Mapping | Regional Mapping | Operational Scope |
 | :--- | :---: | :---: | :---: | :--- |
-| **Management** | Uncapped (Configurable) | Global (All Houses) | Global (All Regions) | Review proposals, grant approvals, reject with mandatory feedback, audit analytics. |
+| **Administration** | Uncapped (Configurable) | Global (All Houses) | Global (All Regions) | Review proposals, grant approvals, reject with mandatory feedback, audit analytics. |
 | **Upper House Council (UHC)** | **36 Members** | **12 Houses** &times; 3 each | Global / Cross-regional | House leadership, activity monitoring, advisory oversight, policy guidance. |
 | **Lower House Council (LHC)** | **120 Members** | **12 Houses** &times; 10 each | **10 Regions** (~12 each) | Propose local meetups, invite same-region LHC peers, co-host events, represent student peers. |
 
@@ -75,7 +75,7 @@ The student governance system operates across two orthogonal axes:
 
 ```mermaid
 graph LR
-    subgraph Management
+    subgraph Administration
         M1[Approve / Reject Proposals]
         M2[Input Official Decision Remarks]
         M3[Global Queue & All Houses View]
@@ -96,9 +96,9 @@ graph LR
     end
 ```
 
-### Management Role Navigation & Core Modules
+### Administration Role Navigation & Core Modules
 
-The Management role provides central administration across 4 core views:
+The Administration role provides central administration across 4 core views:
 
 1. **🏠 Home (Executive Dashboard)**
    - Executive metrics banner: Pending Approvals count, Approved Meets, Completed Meets, and Pending Reimbursements.
@@ -128,7 +128,7 @@ The Management role provides central administration across 4 core views:
      - Actual Attendance count with proof notes (e.g., signed roll sheets, QR check-ins, event photos).
      - Itemized bills & vouchers (receipt attachment files).
      - Bank account / UPI ID payout destination.
-   - Management Actions:
+   - Administration Actions:
      - **✓ Approve Claim**: Authorize payout and enter finance reference / notes.
      - **⏳ Mark In-Progress**: Mark claim as processing with Institute Accounts Office.
      - **✕ Reject Claim**: Provide guidance / rejection remarks.
@@ -137,7 +137,7 @@ The Management role provides central administration across 4 core views:
 
 ### Detailed Permissions Matrix
 
-| Feature / Action | Management | Upper House Council (UHC) | Lower House Council (LHC) |
+| Feature / Action | Administration | Upper House Council (UHC) | Lower House Council (LHC) |
 | :--- | :---: | :---: | :---: |
 | **Authenticate via Google OAuth / Institutional Email** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **View All Approved & Completed Meetups** | ✅ Global | ✅ All | ✅ All |
@@ -153,6 +153,7 @@ The Management role provides central administration across 4 core views:
 | **View Overall Stats (12 Houses & 10 Regions)** | ✅ **Global Analytics** | ✅ House Analytics | 👁️ Regional |
 | **Receive Real-Time Status Notifications** | ✅ Review alerts | 👁️ House alerts | ✅ Status alerts |
 | **Database Administration / Seed Reset** | ✅ Allowed | ❌ No | ❌ No |
+| **People & access (edit LHC/UHC details, hand over UHC seats, access on/off, CSV/Excel import)** | ✅ **Sole Authority** | ❌ No | ❌ No |
 
 ---
 
@@ -165,7 +166,7 @@ sequenceDiagram
     autonumber
     actor Proposer as Proposing LHC (e.g. Rahul - Reg 4)
     actor Peer as Regional Peer LHCs (Reg 4 Peers)
-    actor Mgmt as Management (Dean / Student Affairs)
+    actor Mgmt as Administration (Dean / Student Affairs)
     participant Server as Flask Server & API
     participant DB as SQLite (data/iitmbs_meets.db)
 
@@ -192,8 +193,8 @@ sequenceDiagram
         Server->>DB: Update status='DECLINED'
     end
 
-    Note over Mgmt, Server: Phase 3: Management Review & Decision
-    Mgmt->>Server: Inspects "Management Queue"
+    Note over Mgmt, Server: Phase 3: Administration Review & Decision
+    Mgmt->>Server: Inspects "Administration Queue"
     Server-->>Mgmt: Shows proposal with peer acceptance count (e.g., 2/2 accepted)
     Mgmt->>Server: POST /api/meetups/{id}/review (action='APPROVE' or 'REJECT', remarks)
     alt Proposal Approved
@@ -218,14 +219,14 @@ stateDiagram-v2
     PEER_REVIEW --> PENDING : Last invitee replies / host sends now
     PEER_REVIEW --> DRAFT : Host withdraws
     PENDING --> DRAFT : Host withdraws
-    PENDING --> APPROVED : Management approves
-    PENDING --> REJECTED : Management rejects (feedback mandatory)
+    PENDING --> APPROVED : Administration approves
+    PENDING --> REJECTED : Administration rejects (feedback mandatory)
     REJECTED --> PEER_REVIEW : Host edits + resubmits (invites outstanding)
     REJECTED --> PENDING : Host edits + resubmits
-    APPROVED --> COMPLETED : Management, or host once the date has passed (filing a claim also completes it)
-    PEER_REVIEW --> CANCELLED : Host / Management
-    PENDING --> CANCELLED : Host / Management
-    APPROVED --> CANCELLED : Host / Management (reason mandatory)
+    APPROVED --> COMPLETED : Administration, or host once the date has passed (filing a claim also completes it)
+    PEER_REVIEW --> CANCELLED : Host / Administration
+    PENDING --> CANCELLED : Host / Administration
+    APPROVED --> CANCELLED : Host / Administration (reason mandatory)
     COMPLETED --> [*]
     CANCELLED --> [*]
 ```
@@ -253,7 +254,7 @@ All transitions are enforced server-side in `portal/api/meetups.py` (`permission
 4. **Submission**:
    - The proposal is saved as `PEER_REVIEW` if co-hosts were invited, otherwise `PENDING`.
    - Invitation records are created with status `INVITED`.
-   - System notifications are dispatched to Management and the invited peers.
+   - System notifications are dispatched to Administration and the invited peers.
 
 #### Phase 2: Regional Peer Collaboration
 1. Invited LHC members receive an in-app notification and an alert badge on the **Peer Invites** sidebar item.
@@ -261,10 +262,10 @@ All transitions are enforced server-side in `portal/api/meetups.py` (`permission
    - View the proposing host, venue, date, and objective.
    - Click **"Accept"** to confirm their co-host participation.
    - Click **"Decline"** if unable to attend.
-3. Peer responses are reflected in real time on the proposal card and in the Management review dashboard.
+3. Peer responses are reflected in real time on the proposal card and in the Administration review dashboard.
 
-#### Phase 3: Central Management Review
-1. Management administrators open the **Management Queue** tab.
+#### Phase 3: Central Administration Review
+1. Administration administrators open the **Administration Queue** tab.
 2. The review drawer displays:
    - Complete proposal details, schedule, venue, and budget.
    - Proposer profile (Roll number, House, Region).
@@ -300,7 +301,7 @@ erDiagram
 
     HOUSES { int id PK; text slug UK; text name; text motto; text color }
     REGIONS { int id PK; text code UK; text name; text states }
-    USERS { text id PK; text name; text email UK; text role "MANAGEMENT|UHC|LHC"; text title; int house_id FK; int region_id FK; text roll_number UK }
+    USERS { text id PK; text name; text email UK; text role "ADMINISTRATION|UHC|LHC"; text title; int house_id FK; int region_id FK; text roll_number UK }
     MEETUPS { int id PK; text title; text description; text category; text proposer_id FK; int house_id FK; int region_id FK; text event_date "preferred, then approved"; text backup_date; text start_time; text end_time; text venue "required, offline only"; int expected_attendees; int budget_per_head; int extra_budget; text extra_budget_note; int budget_requested; text status; text review_comments; text reviewed_by FK; text reviewed_at; text submitted_at; text completed_at }
     MEETUP_INVITATIONS { int id PK; int meetup_id FK; text invitee_id FK; text status "INVITED|ACCEPTED|DECLINED"; text response_note; text responded_at }
     MEETUP_ACTIVITY { int id PK; int meetup_id FK; text actor_id FK; text action; text note; text created_at }
@@ -309,7 +310,7 @@ erDiagram
     NOTIFICATIONS { int id PK; text user_id FK; text title; text body; int meetup_id FK; int is_read }
 ```
 
-Database-level guarantees (CHECK constraints): role shape (LHC = house + region, UHC = house only, Management = neither), `end_time > start_time`, a REJECTED meetup or claim must carry feedback text, one claim per meetup. The same-region invite rule needs a cross-row lookup, so it is enforced in `_sync_invitations()`.
+Database-level guarantees (CHECK constraints): role shape (LHC = house + region, UHC = house only, Administration = neither), `end_time > start_time`, a REJECTED meetup or claim must carry feedback text, one claim per meetup. The same-region invite rule needs a cross-row lookup, so it is enforced in `_sync_invitations()`.
 
 ---
 
@@ -323,7 +324,7 @@ Identity comes from a signed session cookie — **no endpoint accepts a user id 
 * `GET /api/meta` → houses, regions, categories, today.
 
 ### Dashboards
-* `GET /api/home` → role-specific payload (Management: decision queue, claims, upcoming, to-close; UHC: house counts, region coverage, in review; LHC: invites, to-dos, in-flight, upcoming, region).
+* `GET /api/home` → role-specific payload (Administration: decision queue, claims, upcoming, to-close; UHC: house counts, region coverage, in review; LHC: invites, to-dos, in-flight, upcoming, region).
 * `GET /api/calendar?start=&end=&scope=all|region|house|mine` → meetups in review, approved or held within the date range (home calendar).
 * `GET /api/badges` → nav counts. `GET /api/stats?house_id=&region_id=` → totals, by_house, by_region, house×region matrix, by_category, months.
 
@@ -333,8 +334,8 @@ Identity comes from a signed session cookie — **no endpoint accepts a user id 
 * `GET /api/peers` (LHC/UHC) → people the caller may invite: same-region LHCs for an LHC, other UHC members for a UHC member.
 * `POST /api/meetups` (LHC) and `PUT /api/meetups/<id>` (host, DRAFT/REJECTED): `{title, description, category, event_date, backup_date, start_time, end_time, region_id (UHC only), venue, expected_attendees, extra_budget?, extra_budget_note, collab_type, collab_name, collab_about, collab_agenda, collab_contact, collab_sponsored (yes|no), collab_sponsorship, invitee_ids[], submit}` — budget is computed as ₹200 × attendees + extra.`.
 * `DELETE /api/meetups/<id>` (host, DRAFT).
-* `POST /api/meetups/<id>/submit | send-to-management | withdraw` (host).
-* `POST /api/meetups/<id>/review {decision: APPROVE|REJECT, comments, date_choice: PRIMARY|BACKUP}` (Management; comments required to reject; BACKUP approves the backup date).
+* `POST /api/meetups/<id>/submit | send-to-administration | withdraw` (host).
+* `POST /api/meetups/<id>/review {decision: APPROVE|REJECT, comments, date_choice: PRIMARY|BACKUP}` (Administration; comments required to reject; BACKUP approves the backup date).
 * `POST /api/meetups/<id>/complete` · `POST /api/meetups/<id>/cancel {reason}` · `POST /api/meetups/<id>/comments {body}`.
 * `POST /api/invitations/<meetup_id>/respond {decision: ACCEPT|DECLINE, note}` (invitee).
 
@@ -344,8 +345,8 @@ Identity comes from a signed session cookie — **no endpoint accepts a user id 
 * `POST /api/meetups/<id>/claim` — multipart: `attendees` (JSON list of {name, email}), `amount_claimed` (may exceed budget), `expense_notes`, `post_link`, `receipts[]`, `payout_mode` = `SELF` | `OTHER` | `COHOST`, plus bank fields `payee_name, bank_name, account_number, ifsc, upi_id?` (SELF/OTHER; SELF is saved to the profile) or `payee_user_id` (COHOST → status `AWAITING_PAYEE`, co-host notified).
 * `POST /api/claims/<id>/payee-response {decision: CONFIRM|DECLINE, note}` (the co-host) — CONFIRM snapshots their saved details → `PENDING_REVIEW`; DECLINE → `PAYEE_DECLINED`.
 * `POST /api/claims/<id>/payee` (claimant, while `AWAITING_PAYEE`/`PAYEE_DECLINED`) — choose a different payee (same payout fields as above).
-* `GET /api/claims?status=` (Management: all · UHC: own house + own + paying them · LHC: own + paying them). `GET /api/claims/<id>` adds `attendees`, `files`. Bank fields are blanked (`bank_hidden: true`) unless the viewer is Management, the payee, or the claimant of a SELF/OTHER claim.
-* `POST /api/claims/<id>/review {decision: APPROVE|IN_PROGRESS|REJECT, amount_approved, notes}` (Management; only `PENDING_REVIEW`/`IN_PROGRESS`).
+* `GET /api/claims?status=` (Administration: all · UHC: own house + own + paying them · LHC: own + paying them). `GET /api/claims/<id>` adds `attendees`, `files`. Bank fields are blanked (`bank_hidden: true`) unless the viewer is Administration, the payee, or the claimant of a SELF/OTHER claim.
+* `POST /api/claims/<id>/review {decision: APPROVE|IN_PROGRESS|REJECT, amount_approved, notes}` (Administration; only `PENDING_REVIEW`/`IN_PROGRESS`).
 * `GET /api/claims/<id>/files/<file_id>` — download a receipt.
 
 ### Profile & insights
@@ -353,9 +354,16 @@ Identity comes from a signed session cookie — **no endpoint accepts a user id 
 * `GET /api/insights/house` (UHC) — house totals, rank among houses, per-LHC activity, regional spread, monthly trend.
 * `GET /api/insights/me` (LHC) — personal totals, region totals and rank, houses active in the region, regional LHC table.
 
+### People & access (Administration)
+* `GET /api/admin/people?role=&q=&house_id=&region_id=&active=` → `{people, counts}`.
+* `POST /api/admin/people` `{role, name, email, roll_number, house_id, region_id, title, is_active}` · `PUT /api/admin/people/<id>` (same fields, role fixed).
+* `GET /api/admin/people/export.csv` — columns `ID, Role, Name, Email, Roll number, House, Region, Position, Access`.
+* `POST /api/admin/people/import` (multipart `file`, .csv/.xlsx) → `{rows: [{line, action: create|update|unchanged|error, changes|error, record, id}], summary}` — nothing written.
+* `POST /api/admin/people/import/apply {rows}` — re-validates and applies all-or-nothing.
+
 ### Notifications & admin
 * `GET /api/notifications` · `POST /api/notifications/read`.
-* `POST /api/admin/reset {confirm: "RESET"}` (Management) — rebuild demo data.
+* `POST /api/admin/reset {confirm: "RESET"}` (Administration) — rebuild demo data.
 
 ---
 
@@ -364,7 +372,7 @@ Identity comes from a signed session cookie — **no endpoint accepts a user id 
 * **Code layout**: `templates/index.html` (shell + icon sprite) · `static/css/style.css` (tokens, components, responsive tiers) · `static/js/app.js` (session, hash router, nav, notifications) · `static/js/ui.js` (escaping `html` template tag, formatters, components, dialog/popover/toast) · `static/js/views/*.js` (one module per screen).
 * **Routes**: `#/home`, `#/meetups`, `#/meetups/:id`, `#/meetups/:id/edit`, `#/new`, `#/invites` (LHC), `#/claims`, `#/insights`, `#/settings`.
 * **Appearance**: themes `light` (warm paper), `dark` (soft graphite, default), `black` (true black) and Auto; seven accent palettes; three typefaces. Chosen in Settings or via ⌘K and stored per device. Status is a glyph whose ring fills as a meetup progresses (draft → with co-hosts → awaiting decision → approved → held).
-* **Home calendar**: month grid with approved (solid), in-review (outlined) and held (muted) meetups, plus a day agenda. Scopes: Management = all; UHC = own house / all; LHC = own region / mine / everywhere.
+* **Home calendar**: month grid with approved (solid), in-review (outlined) and held (muted) meetups, plus a day agenda. Scopes: Administration = all; UHC = own house / all; LHC = own region / mine / everywhere.
 * **Command palette**: ⌘K / Ctrl+K (search button on phones) — navigate, create, switch theme/accent, search meetups.
 * **Layout tiers**: ≥1180px full sidebar · 768–1179px icon rail · <768px top bar + off-canvas drawer + bottom tab bar, dialogs become bottom sheets. No page-level horizontal scroll at any width (wide tables like the heatmap scroll inside their card).
 
@@ -380,7 +388,7 @@ Open **`http://localhost:5050`**.
 
 ### 8.2 Standard Test Walkthrough
 1. **Sign in as Rahul Verma** (LHC, Sundarbans · Mumbai). *New proposal* → fill the form; the co-host list shows only Mumbai LHCs. Invite Sneha Roy and submit → status *With co-hosts*.
-2. **Switch account → Sneha Roy**. Home shows the invite; *Accept*. When the last invitee replies the proposal moves to *Awaiting decision* automatically (or Rahul can *Send to Management now*).
-3. **Switch account → Dr. Meera Krishnan** (Management). Home → *Decision queue* → open it → *Approve* (or *Reject*, which requires feedback).
-4. After the date (or via Management's *Mark as held*), Rahul files a **reimbursement claim** with receipts from the meetup page; Management verifies it under *Reimbursements*.
+2. **Switch account → Sneha Roy**. Home shows the invite; *Accept*. When the last invitee replies the proposal moves to *Awaiting decision* automatically (or Rahul can *Send to Administration now*).
+3. **Switch account → Dr. Meera Krishnan** (Administration). Home → *Decision queue* → open it → *Approve* (or *Reject*, which requires feedback).
+4. After the date (or via Administration's *Mark as held*), Rahul files a **reimbursement claim** with receipts from the meetup page; Administration verifies it under *Reimbursements*.
 5. **Vikram Rao** (UHC, Sundarbans) sees house activity, region coverage of his LHCs, and can comment on Sundarbans meetups.

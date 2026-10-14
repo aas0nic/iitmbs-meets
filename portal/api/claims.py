@@ -1,7 +1,7 @@
 """Post-meetup reimbursement claims.
 
 A claim carries: who attended (name + email, typed or imported from CSV/Excel), what was spent
-(amount may exceed the approved budget — Management decides), receipts (stored under data/uploads/),
+(amount may exceed the approved budget — Administration decides), receipts (stored under data/uploads/),
 a post link, and who gets paid:
 
   SELF    the claimant — details pre-filled from and saved back to their profile
@@ -10,7 +10,7 @@ a post link, and who gets paid:
           never sees. The claim waits (AWAITING_PAYEE) until the co-host confirms those details; if they
           decline (PAYEE_DECLINED) the claimant picks another payee.
 
-Bank details are only ever returned to Management, the payee, and (for SELF/OTHER) the claimant.
+Bank details are only ever returned to Administration, the payee, and (for SELF/OTHER) the claimant.
 """
 import json
 import os
@@ -23,7 +23,7 @@ from ..auth import current_user, login_required
 from ..db import UPLOAD_DIR, get_db, one, rows, utcnow
 from ..importers import ImportError_, read_attendees
 from .common import (BUDGET_PER_HEAD, EMAIL_RE, PROPOSER_ROLES, clean_int, clean_text, get_visible_meetup,
-                     log_activity, management_ids, notify, parse_bank, today_iso)
+                     log_activity, administration_ids, notify, parse_bank, today_iso)
 from .profile import load_payout, save_payout_details
 
 bp = Blueprint('claims', __name__, url_prefix='/api')
@@ -50,8 +50,8 @@ CLAIM_SELECT = '''
 
 
 def claim_scope(user):
-    """Management sees all claims; UHC their house's and their own; LHC their own. Payees see claims paying them."""
-    if user['role'] == 'MANAGEMENT':
+    """Administration sees all claims; UHC their house's and their own; LHC their own. Payees see claims paying them."""
+    if user['role'] == 'ADMINISTRATION':
         return '1=1', []
     if user['role'] == 'UHC':
         return '(m.house_id = ? OR c.claimant_id = ? OR c.payee_user_id = ?)', [user['house_id'], user['id'], user['id']]
@@ -59,7 +59,7 @@ def claim_scope(user):
 
 
 def can_see_bank(claim, user):
-    return (user['role'] == 'MANAGEMENT' or claim['payee_user_id'] == user['id']
+    return (user['role'] == 'ADMINISTRATION' or claim['payee_user_id'] == user['id']
             or (claim['claimant_id'] == user['id'] and claim['payout_mode'] != 'COHOST'))
 
 
@@ -69,7 +69,7 @@ def present(claim, user):
         for f in BANK_FIELDS:
             claim[f] = None
         claim['bank_hidden'] = True
-    claim['can_review'] = user['role'] == 'MANAGEMENT' and claim['status'] in ('PENDING_REVIEW', 'IN_PROGRESS')
+    claim['can_review'] = user['role'] == 'ADMINISTRATION' and claim['status'] in ('PENDING_REVIEW', 'IN_PROGRESS')
     claim['can_confirm_payee'] = claim['payee_user_id'] == user['id'] and claim['payout_mode'] == 'COHOST' \
         and claim['status'] == 'AWAITING_PAYEE'
     claim['can_change_payee'] = claim['claimant_id'] == user['id'] and claim['status'] in ('AWAITING_PAYEE', 'PAYEE_DECLINED')
@@ -137,9 +137,9 @@ def apply_payout(claim_id, m, user, data, actor_verb='filed'):
     if cohost:
         notify([cohost['id']], 'Confirm your bank details',
                f'{user["name"]} {actor_verb} a claim for "{m["title"]}" to be paid to you. '
-               'Check your saved bank details and confirm so it can go to Management.', m['id'])
+               'Check your saved bank details and confirm so it can go to Administration.', m['id'])
     else:
-        notify(management_ids(), 'Claim to verify', f'A claim for "{m["title"]}" is ready for review.', m['id'])
+        notify(administration_ids(), 'Claim to verify', f'A claim for "{m["title"]}" is ready for review.', m['id'])
     return status
 
 
@@ -332,9 +332,9 @@ def payee_response(claim_id):
                     saved['upi_id'], now, claim_id))
         log_activity(claim['meetup_id'], user['id'], 'CLAIM_PAYEE_CONFIRMED')
         notify([claim['claimant_id']], 'Payee confirmed',
-               f'{user["name"]} confirmed their bank details. Your claim for "{claim["meetup_title"]}" is with Management.',
+               f'{user["name"]} confirmed their bank details. Your claim for "{claim["meetup_title"]}" is with Administration.',
                claim['meetup_id'])
-        notify(management_ids(), 'Claim to verify', f'A claim for "{claim["meetup_title"]}" is ready for review.',
+        notify(administration_ids(), 'Claim to verify', f'A claim for "{claim["meetup_title"]}" is ready for review.',
                claim['meetup_id'])
     elif decision == 'DECLINE':
         note = clean_text(data.get('note'), 'Reason', 3, 500)
@@ -350,7 +350,7 @@ def payee_response(claim_id):
 
 
 @bp.post('/claims/<int:claim_id>/review')
-@login_required('MANAGEMENT')
+@login_required('ADMINISTRATION')
 def review(claim_id):
     user = current_user()
     claim = load_claim(claim_id, user)

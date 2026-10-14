@@ -2,7 +2,7 @@
 //
 //   node tools/shoot.mjs <outdir> "user|route|width|name[|mode[|accent]]" ...
 //
-//   node tools/shoot.mjs .shots "mgmt-1|/home|1440|mgmt-home" "lhc-11-5|/new|390|propose-phone|dark"
+//   node tools/shoot.mjs .shots "admin-1|/home|1440|admin-home" "lhc-11-5|/new|390|propose-phone|dark"
 //   user "none" = signed out (sign-in screen). Prints OVERFLOW if the page scrolls sideways.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';

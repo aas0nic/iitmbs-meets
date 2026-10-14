@@ -37,18 +37,20 @@ CREATE TABLE regions (
 CREATE TABLE users (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
-    email       TEXT NOT NULL UNIQUE,
-    role        TEXT NOT NULL CHECK (role IN ('MANAGEMENT', 'UHC', 'LHC')),
+    email       TEXT NOT NULL UNIQUE,          -- UHC: fixed seat address handed over after elections; LHC: student ID email
+    role        TEXT NOT NULL CHECK (role IN ('ADMINISTRATION', 'UHC', 'LHC')),
     title       TEXT,                      -- e.g. "Student Activities Office", "House Secretary"
     house_id    INTEGER REFERENCES houses(id),
     region_id   INTEGER REFERENCES regions(id),
     roll_number TEXT UNIQUE,
+    is_active   INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),   -- portal access on/off (Administration)
+    updated_at  TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    -- Each tier has a fixed shape: LHC = house + region, UHC = house only, Management = neither.
+    -- Each tier has a fixed shape: LHC = house + region, UHC = house only, Administration = neither.
     CHECK (
         (role = 'LHC'        AND house_id IS NOT NULL AND region_id IS NOT NULL) OR
         (role = 'UHC'        AND house_id IS NOT NULL AND region_id IS NULL)     OR
-        (role = 'MANAGEMENT' AND house_id IS NULL     AND region_id IS NULL)
+        (role = 'ADMINISTRATION' AND house_id IS NULL     AND region_id IS NULL)
     )
 );
 CREATE INDEX idx_users_role_region ON users(role, region_id);
@@ -67,7 +69,7 @@ CREATE TABLE meetups (
     house_id           INTEGER NOT NULL REFERENCES houses(id),    -- proposer's house at time of proposal
     region_id          INTEGER NOT NULL REFERENCES regions(id),   -- LHC: own region; UHC: any region they choose
     event_date         TEXT NOT NULL,                             -- YYYY-MM-DD; preferred date, or the approved one once decided
-    backup_date        TEXT,                                      -- alternate date Management may approve instead
+    backup_date        TEXT,                                      -- alternate date Administration may approve instead
     start_time         TEXT NOT NULL,                             -- HH:MM (24h)
     end_time           TEXT NOT NULL,                             -- HH:MM (24h)
     venue              TEXT NOT NULL,                             -- meetups are offline-only
@@ -133,7 +135,7 @@ CREATE TABLE meetup_activity (
     actor_id   TEXT REFERENCES users(id),
     action     TEXT NOT NULL CHECK (action IN (
                    'CREATED', 'EDITED', 'SUBMITTED', 'RESUBMITTED', 'WITHDRAWN',
-                   'INVITE_ACCEPTED', 'INVITE_DECLINED', 'SENT_TO_MANAGEMENT',
+                   'INVITE_ACCEPTED', 'INVITE_DECLINED', 'SENT_TO_ADMINISTRATION',
                    'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED', 'COMMENT',
                    'CLAIM_FILED', 'CLAIM_PAYEE_CONFIRMED', 'CLAIM_PAYEE_DECLINED',
                    'CLAIM_IN_PROGRESS', 'CLAIM_APPROVED', 'CLAIM_REJECTED')),
@@ -174,7 +176,7 @@ CREATE TABLE claims (
     created_at         TEXT NOT NULL DEFAULT (datetime('now')),
     CHECK (status <> 'REJECTED' OR length(trim(coalesce(review_notes, ''))) > 0),
     CHECK (payout_mode = 'OTHER' OR payee_user_id IS NOT NULL),
-    -- Once a claim reaches Management, it must carry complete bank details.
+    -- Once a claim reaches Administration, it must carry complete bank details.
     CHECK (status IN ('AWAITING_PAYEE', 'PAYEE_DECLINED')
            OR (payee_name IS NOT NULL AND bank_name IS NOT NULL AND account_number IS NOT NULL AND ifsc IS NOT NULL))
 );

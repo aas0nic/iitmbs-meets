@@ -15,7 +15,7 @@ DB_PATH = os.path.join(DATA_DIR, 'iitmbs_meets.db')
 UPLOAD_DIR = os.path.join(DATA_DIR, 'uploads')
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), 'schema.sql')
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 8
 
 
 def connect():

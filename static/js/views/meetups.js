@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { $, empty, html, icon, meetupRow, skeleton } from '../ui.js';
 
 const TABS = {
-  MANAGEMENT: [
+  ADMINISTRATION: [
     { id: 'pending', label: 'Awaiting decision', params: { status: 'PENDING', sort: 'submitted' } },
     { id: 'review', label: 'With co-hosts', params: { status: 'PEER_REVIEW', sort: 'submitted' } },
     { id: 'upcoming', label: 'Upcoming', params: { status: 'APPROVED', when: 'upcoming', sort: 'date_asc' } },
@@ -40,7 +40,7 @@ export async function render(el, ctx) {
   ctx.setTitle('Meetups');
 
   const sub = {
-    MANAGEMENT: 'Every proposal across all houses and regions.',
+    ADMINISTRATION: 'Every proposal across all houses and regions.',
     UHC: `Proposals and events from LHCs. Filtered to ${user.house_name} by default.`,
     LHC: `Your proposals, what's planned in ${user.region_name}, and approved meetups everywhere.`,
   }[user.role];
@@ -48,7 +48,7 @@ export async function render(el, ctx) {
   el.innerHTML = String(html`
     <div class="page-head">
       <div class="page-head-text"><h1 class="page-title">Meetups</h1><p class="page-sub">${sub}</p></div>
-      ${user.role !== 'MANAGEMENT' ? html`<div class="page-actions hide-mobile"><a class="btn btn-primary" href="#/new">${icon('plus')} New proposal</a></div>` : ''}
+      ${user.role !== 'ADMINISTRATION' ? html`<div class="page-actions hide-mobile"><a class="btn btn-primary" href="#/new">${icon('plus')} New proposal</a></div>` : ''}
     </div>
     <div class="toolbar">
       <div class="tabs" role="tablist">${tabs.map((t) => html`<button class="tab ${t.id === f.tab ? 'active' : ''}" data-tab="${t.id}" role="tab">${t.label}</button>`)}</div>
@@ -137,7 +137,7 @@ function emptyState(f, user) {
   if (filtered) return html`<div class="card">${empty('search', 'No meetups match these filters', 'Try clearing the search or picking a different house or region.')}</div>`;
   const msg = {
     pending: ['Nothing awaiting a decision', 'Proposals show up here once their co-hosts have replied.'],
-    review: ['Nothing in review', 'No proposals are waiting on co-hosts or Management.'],
+    review: ['Nothing in review', 'No proposals are waiting on co-hosts or Administration.'],
     upcoming: ['No upcoming meetups', 'Approved meetups with a future date appear here.'],
     past: ['No past meetups yet', ''],
     rejected: ['No rejected proposals', ''],
@@ -145,7 +145,7 @@ function emptyState(f, user) {
     region: [`Nothing planned in ${user.region_name}`, 'Be the first — propose a meetup for your region.'],
     all: ['No meetups yet', ''],
   }[f.tab];
-  const cta = user.role !== 'MANAGEMENT' && ['mine', 'region'].includes(f.tab)
+  const cta = user.role !== 'ADMINISTRATION' && ['mine', 'region'].includes(f.tab)
     ? html`<a class="btn btn-primary btn-sm" href="#/new">${icon('plus')} New proposal</a>` : '';
   return html`<div class="card">${empty('calendar', msg[0], msg[1], cta)}</div>`;
 }

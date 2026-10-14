@@ -15,7 +15,7 @@ from .seed import DEMO_ACCOUNTS
 bp = Blueprint('auth', __name__, url_prefix='/api')
 
 USER_SELECT = '''
-    SELECT u.id, u.name, u.email, u.role, u.title, u.roll_number,
+    SELECT u.id, u.name, u.email, u.role, u.title, u.roll_number, u.is_active,
            u.house_id, h.name AS house_name, h.slug AS house_slug, h.color AS house_color,
            u.region_id, r.name AS region_name, r.code AS region_code
     FROM users u
@@ -31,7 +31,8 @@ def load_user(user_id):
 def current_user():
     if 'user' not in g:
         uid = session.get('uid')
-        g.user = load_user(uid) if uid else None
+        user = load_user(uid) if uid else None
+        g.user = user if user and user['is_active'] else None  # access revoked → signed out
     return g.user
 
 
@@ -61,6 +62,8 @@ def sign_in():
     user = load_user(uid) if uid else None
     if not user:
         abort(404, 'No such account.')
+    if not user['is_active']:
+        abort(403, 'Portal access for this account is turned off. Contact Administration.')
     session.clear()
     session['uid'] = user['id']
     session.permanent = True
@@ -78,12 +81,12 @@ def sign_out():
 def directory():
     """Roster for the demo sign-in screen."""
     q = (request.args.get('q') or '').strip()
-    sql = USER_SELECT + ' WHERE 1=1'
+    sql = USER_SELECT + ' WHERE u.is_active = 1'
     params = []
     if q:
         sql += ' AND (u.name LIKE ? OR u.roll_number LIKE ? OR h.name LIKE ? OR r.name LIKE ?)'
         params += [f'%{q}%'] * 4
-    sql += " ORDER BY CASE u.role WHEN 'MANAGEMENT' THEN 0 WHEN 'UHC' THEN 1 ELSE 2 END, h.name, r.id, u.name LIMIT 60"
+    sql += " ORDER BY CASE u.role WHEN 'ADMINISTRATION' THEN 0 WHEN 'UHC' THEN 1 ELSE 2 END, h.name, r.id, u.name LIMIT 60"
     db = get_db()
-    featured = [load_user(uid) for uid in DEMO_ACCOUNTS]
+    featured = [u for u in (load_user(uid) for uid in DEMO_ACCOUNTS) if u and u['is_active']]
     return jsonify(users=rows(db.execute(sql, params)), featured=featured)

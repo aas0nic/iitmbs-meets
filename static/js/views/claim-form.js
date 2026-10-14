@@ -68,7 +68,7 @@ export async function render(el, ctx) {
       </section>
 
       <section class="form-section">
-        <div class="form-section-head"><h3>What was spent</h3><p>The amount starts at ₹${perHead} per student who attended. Change it to what you actually spent — it can go over the approved budget; Management decides the payout.</p></div>
+        <div class="form-section-head"><h3>What was spent</h3><p>The amount starts at ₹${perHead} per student who attended. Change it to what you actually spent — it can go over the approved budget; Administration decides the payout.</p></div>
         <div class="form-section-body">
           <div class="field-row keep">
             <div class="field"><span class="field-label">Students who attended</span><div class="readout"><span data-att-count>0</span><small data-att-vs></small></div></div>
@@ -123,14 +123,14 @@ export async function render(el, ctx) {
                 <span class="payee-body"><strong>${c.name}</strong><small>${c.house_name} · co-host</small></span>
                 <span class="payee-state">${c.has_details ? html`${icon('check', 'i-sm')} Bank details saved` : 'No bank details saved'}</span>
               </label>`)}</div>
-              <p class="field-hint">${icon('alert', 'i-sm')} Their saved bank details go straight to Management — you won't see them. They'll get a notification to confirm the details before the claim is reviewed.</p>`
+              <p class="field-hint">${icon('alert', 'i-sm')} Their saved bank details go straight to Administration — you won't see them. They'll get a notification to confirm the details before the claim is reviewed.</p>`
               : html`<div class="empty-inline" style="padding:4px 0">No co-hosts from another house accepted this meetup.</div>`}
           </div>
         </div>
       </section>
 
       <div class="form-footer">
-        <span class="hint">${changing ? 'The claim goes to Management once the payee is settled.' : 'Management verifies bills and attendance before payout.'}</span>
+        <span class="hint">${changing ? 'The claim goes to Administration once the payee is settled.' : 'Administration verifies bills and attendance before payout.'}</span>
         <a class="btn btn-ghost" href="#/meetups/${id}">Cancel</a>
         <button type="submit" class="btn btn-primary">${icon('send', 'i-sm')} ${changing ? 'Update payee' : 'Submit claim'}</button>
       </div>
@@ -170,7 +170,7 @@ export async function render(el, ctx) {
       ? `Suggested ${rupees(suggested)} (${attendees.length} × ${rupees(perHead)}) · <a class="link" href="#" data-use-suggested>Use suggestion</a>`
       : `${attendees.length || 0} × ${rupees(perHead)}`;
     const notes = [];
-    if (amount > m.budget_requested) notes.push(`${rupees(amount - m.budget_requested)} over the approved budget of ${rupees(m.budget_requested)}. Add a reason in the spending notes — Management may approve less.`);
+    if (amount > m.budget_requested) notes.push(`${rupees(amount - m.budget_requested)} over the approved budget of ${rupees(m.budget_requested)}. Add a reason in the spending notes — Administration may approve less.`);
     if (attendees.length > m.expected_attendees) notes.push(`${attendees.length - m.expected_attendees} more students attended than the ${m.expected_attendees} expected.`);
     const over = $('[data-over]', form);
     over.hidden = !notes.length;
@@ -288,7 +288,7 @@ export async function render(el, ctx) {
           files.forEach((f) => fd.append('receipts', f));
           res = await api.post(`/api/meetups/${id}/claim`, fd);
         }
-        toast(res.status === 'AWAITING_PAYEE' ? 'Sent. The co-host will confirm their bank details, then it goes to Management.'
+        toast(res.status === 'AWAITING_PAYEE' ? 'Sent. The co-host will confirm their bank details, then it goes to Administration.'
           : 'Claim submitted for verification.');
         ctx.refreshBadges();
         location.hash = `#/meetups/${id}`;

@@ -16,12 +16,12 @@ export async function render(el, ctx) {
   ctx.setTitle('Home');
   const data = await api.get('/api/home');
   if (!ctx.isCurrent()) return;
-  const view = { MANAGEMENT: management, UHC: uhc, LHC: lhc }[ctx.user.role];
+  const view = { ADMINISTRATION: administration, UHC: uhc, LHC: lhc }[ctx.user.role];
   el.innerHTML = String(view(data, ctx));
   bind(el, ctx);
   const u = ctx.user;
   const scopes = {
-    MANAGEMENT: [['all', 'All meetups']],
+    ADMINISTRATION: [['all', 'All meetups']],
     UHC: [['house', u.house_name], ['all', 'All houses']],
     LHC: [['region', u.region_name], ['mine', 'Mine'], ['all', 'Everywhere']],
   }[u.role];
@@ -48,7 +48,7 @@ const rows = (list, opts) => html`<div class="rows">${list.map((m) => meetupRow(
 const ACTIVITY_TEXT = {
   SUBMITTED: 'submitted', RESUBMITTED: 'resubmitted', WITHDRAWN: 'withdrew', EDITED: 'edited',
   INVITE_ACCEPTED: 'agreed to co-host', INVITE_DECLINED: 'declined to co-host',
-  SENT_TO_MANAGEMENT: 'sent to Management', APPROVED: 'approved', REJECTED: 'rejected',
+  SENT_TO_ADMINISTRATION: 'sent to Administration', APPROVED: 'approved', REJECTED: 'rejected',
   COMPLETED: 'marked complete', CANCELLED: 'cancelled', COMMENT: 'commented on',
   CLAIM_FILED: 'filed a claim for', CLAIM_PAYEE_CONFIRMED: 'confirmed payout details for', CLAIM_PAYEE_DECLINED: 'declined the payout for', CLAIM_IN_PROGRESS: 'forwarded the claim for', CLAIM_APPROVED: 'paid out the claim for',
   CLAIM_REJECTED: 'rejected the claim for',
@@ -65,8 +65,8 @@ const waited = (m) => {
   return html`<span class="age ${h > 72 ? 'is-old' : ''}" title="Waiting since submission">waiting ${label}</span>`;
 };
 
-// ── Management ──────────────────────────────────────────────────────────────
-function management(d, ctx) {
+// ── Administration ──────────────────────────────────────────────────────────────
+function administration(d, ctx) {
   const c = d.counts;
   return html`
     <div class="hello"><div class="hello-text"><h1>${greeting()}, ${firstName(ctx.user.name)}</h1><p>${todayLong()}</p></div></div>

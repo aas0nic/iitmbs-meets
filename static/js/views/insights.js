@@ -1,5 +1,5 @@
 // Insights, per role:
-//   Management → institute-wide (12 houses × 10 regions, filters)
+//   Administration → institute-wide (12 houses × 10 regions, filters)
 //   UHC        → their house: LHC activity, regional spread, rank among houses
 //   LHC        → themselves + their region: peers, houses active in the region, rank among regions
 import { api } from '../api.js';

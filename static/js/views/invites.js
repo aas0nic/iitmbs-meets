@@ -25,7 +25,7 @@ export async function render(el, ctx) {
   el.innerHTML = String(html`
     <div class="page-head"><div class="page-head-text">
       <h1 class="page-title">Co-host invites</h1>
-      <p class="page-sub">${ctx.user.role === 'UHC' ? 'UHC members from other houses' : `LHCs in ${ctx.user.region_name}`} who want you on their meetup. Proposals go to Management once every co-host replies.</p>
+      <p class="page-sub">${ctx.user.role === 'UHC' ? 'UHC members from other houses' : `LHCs in ${ctx.user.region_name}`} who want you on their meetup. Proposals go to Administration once every co-host replies.</p>
     </div></div>
 
     <section>

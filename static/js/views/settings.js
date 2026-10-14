@@ -1,4 +1,4 @@
-// Appearance (theme, accent, typeface), account, and (Management only) demo data reset.
+// Appearance (theme, accent, typeface), account, and (Administration only) demo data reset.
 import { api } from '../api.js';
 import { ACCENTS, avatar, FONTS, getPrefs, html, icon, loadFont, MODES, openDialog, ROLE, setPrefs, toast, userLine } from '../ui.js';
 
@@ -14,7 +14,7 @@ export async function render(el, ctx) {
   const u = ctx.user;
   ctx.setTitle('Settings');
   FONTS.forEach((f) => loadFont(f.id)); // previews render in each typeface
-  const canClaim = u.role !== 'MANAGEMENT';
+  const canClaim = u.role !== 'ADMINISTRATION';
   let payout = canClaim ? (await api.get('/api/me/payout')).payout : null;
   if (!ctx.isCurrent()) return;
 
@@ -71,14 +71,14 @@ export async function render(el, ctx) {
             </div>
             <label class="field"><span class="field-label">UPI ID <span class="opt">optional</span></span><input class="input" name="upi_id" autocomplete="off" value="${payout?.upi_id || ''}" placeholder="name@bank"></label>
             <div class="payout-actions">
-              <span class="field-hint">Only you and Management (when paying a claim) see these.</span>
+              <span class="field-hint">Only you and Administration (when paying a claim) see these.</span>
               ${payout ? html`<button type="button" class="btn btn-ghost btn-sm" data-payout-clear>Remove</button>` : ''}
               <button type="submit" class="btn btn-primary btn-sm">${payout ? 'Update details' : 'Save details'}</button>
             </div>
           </form>
         </section>` : ''}
 
-        ${u.role === 'MANAGEMENT' ? html`<section class="card">
+        ${u.role === 'ADMINISTRATION' ? html`<section class="card">
           <header class="card-head"><h2 class="card-title">Demo data</h2></header>
           <div class="setting">
             <div class="setting-body"><strong>Reset to sample data</strong>

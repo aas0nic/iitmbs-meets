@@ -1,4 +1,4 @@
-"""Read attendee lists (name + email) from CSV or Excel (.xlsx) uploads using only the standard library."""
+"""Read CSV / Excel (.xlsx) uploads using only the standard library: attendee lists and roster imports."""
 import csv
 import io
 import re
@@ -19,6 +19,11 @@ class ImportError_(ValueError):
 
 def read_attendees(filename, data):
     """Return (attendees, skipped) where attendees = [{'name', 'email'}], de-duplicated by email."""
+    return _to_attendees(read_table(filename, data))
+
+
+def read_table(filename, data):
+    """Rows (lists of strings) from a .csv or .xlsx upload; first sheet only for Excel."""
     if len(data) > MAX_BYTES:
         raise ImportError_('File is too large (max 2 MB).')
     ext = filename.lower().rsplit('.', 1)[-1] if '.' in filename else ''
@@ -30,7 +35,7 @@ def read_attendees(filename, data):
         raise ImportError_('Old .xls files are not supported. Save the sheet as .xlsx or .csv and try again.')
     else:
         raise ImportError_('Upload a .csv or .xlsx file.')
-    return _to_attendees(table[:MAX_ROWS + 1])
+    return [[str(c).strip() for c in r] for r in table[:MAX_ROWS + 1] if any(str(c).strip() for c in r)]
 
 
 def _csv_rows(data):

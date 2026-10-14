@@ -14,6 +14,7 @@ import * as invites from './views/invites.js';
 import * as claims from './views/claims.js';
 import * as insights from './views/insights.js';
 import * as settings from './views/settings.js';
+import * as people from './views/people.js';
 
 export const state = { user: null, meta: null, badges: {} };
 
@@ -29,6 +30,7 @@ const routes = [
   [/^\/claims$/, claims, 'claims'],
   [/^\/insights$/, insights, 'insights'],
   [/^\/settings$/, settings, 'settings'],
+  [/^\/people$/, people, 'people', ['ADMINISTRATION']],
 ];
 
 export const navigate = (path) => { location.hash = '#' + path; };
@@ -42,12 +44,11 @@ let renderToken = 0;
 async function route() {
   if (!state.user) return;
   closePopover();
-  closeDrawer();
   const { path, query } = currentPath();
   const match = routes.find(([re, , , roles]) => re.test(path) && (!roles || roles.includes(state.user.role)));
   if (!match) return navigate('/home');
   const [re, view, section] = match;
-  if (view === propose && state.user.role === 'MANAGEMENT') return navigate('/home');
+  if (view === propose && state.user.role === 'ADMINISTRATION') return navigate('/home');
   const params = path.match(re).slice(1);
   setActive(section);
 
@@ -88,11 +89,12 @@ function setTitle(...crumbs) {
 function navItems(role) {
   const items = [
     { id: 'home', label: 'Home', icon: 'home', href: '#/home' },
-    { id: 'meetups', label: role === 'MANAGEMENT' ? 'Meetups' : 'Meetups', icon: 'calendar', href: '#/meetups', badge: 'meetups' },
+    { id: 'meetups', label: role === 'ADMINISTRATION' ? 'Meetups' : 'Meetups', icon: 'calendar', href: '#/meetups', badge: 'meetups' },
   ];
-  if (role !== 'MANAGEMENT') items.push({ id: 'invites', label: 'Co-host invites', short: 'Invites', icon: 'inbox', href: '#/invites', badge: 'invites' });
+  if (role !== 'ADMINISTRATION') items.push({ id: 'invites', label: 'Co-host invites', short: 'Invites', icon: 'inbox', href: '#/invites', badge: 'invites' });
   items.push({ id: 'claims', label: 'Reimbursements', short: 'Claims', icon: 'receipt', href: '#/claims', badge: 'claims' });
   items.push({ id: 'insights', label: 'Insights', icon: 'chart', href: '#/insights' });
+  if (role === 'ADMINISTRATION') items.push({ id: 'people', label: 'People & access', short: 'People', icon: 'shield', href: '#/people' });
   return items;
 }
 
@@ -108,14 +110,13 @@ function renderNav() {
       ${icon(it.icon)}<span class="nav-label">${it.label}</span>${count(it.badge)}</a>`)}
   `);
 
-  // Phone tab bar: four destinations + account.
-  const tabs = role === 'LHC'
-    ? ['home', 'meetups', 'invites', 'claims']
-    : role === 'MANAGEMENT' ? ['home', 'meetups', 'claims', 'insights'] : ['home', 'meetups', 'invites', 'insights'];
+  // Phone tab bar: the five main destinations. (Phones have no sidebar; profile + settings live in the
+  // top-right account menu, which is the only profile entry point on every screen size.)
+  const tabs = role === 'ADMINISTRATION' ? ['home', 'meetups', 'claims', 'insights', 'people']
+    : ['home', 'meetups', 'invites', 'claims', 'insights'];
   $('#tabbar').innerHTML = String(html`
     ${tabs.map((id) => items.find((i) => i.id === id)).map((it) => html`
       <a data-nav="${it.id}" href="${it.href}">${icon(it.icon)}<span>${it.short || it.label}</span>${it.badge && state.badges[it.badge] ? html`<span class="nav-count">${state.badges[it.badge]}</span>` : ''}</a>`)}
-    <button type="button" data-action="account">${avatar(state.user, 'avatar-sm')}<span>Me</span></button>
   `);
   setActive(currentSection);
 }
@@ -130,11 +131,8 @@ function renderIdentity() {
   const u = state.user;
   $('#topbarAvatar').innerHTML = String(avatar(u));
   $('#topbarName').textContent = u.name;
-  $('#topbarRole').textContent = u.role === 'MANAGEMENT' ? 'Management' : `${ROLE_SHORT[u.role]} · ${u.house_name}`;
-  $('#sidebarAvatar').innerHTML = String(avatar(u, 'avatar-sm'));
-  $('#sidebarName').textContent = u.name;
-  $('#sidebarRole').textContent = u.role === 'MANAGEMENT' ? 'Management' : `${ROLE_SHORT[u.role]} · ${u.house_name}`;
-  const canPropose = u.role !== 'MANAGEMENT';
+  $('#topbarRole').textContent = u.role === 'ADMINISTRATION' ? 'Administration' : `${ROLE_SHORT[u.role]} · ${u.house_name}`;
+  const canPropose = u.role !== 'ADMINISTRATION';
   $('#newProposalBtn').hidden = !canPropose;
   $('#newProposalIcon').hidden = !canPropose;
 }
@@ -150,7 +148,7 @@ export async function refreshBadges() {
   renderNav();
 }
 
-// ── Sidebar: full, icon rail (tablet, or collapsed on desktop), or drawer (phone) ──
+// ── Sidebar: full, or icon rail (tablet, or collapsed on desktop). Phones have no sidebar. ──
 const tabletMq = matchMedia('(min-width: 768px) and (max-width: 1179px)');
 const desktopMq = matchMedia('(min-width: 1180px)');
 function syncRail() {
@@ -168,9 +166,6 @@ function toggleSidebar() {
   syncRail();
 }
 
-// ── Drawer (phone) ──────────────────────────────────────────────────────────
-function openDrawer() { $('#sidebar').classList.add('open'); $('#scrim').hidden = false; }
-function closeDrawer() { $('#sidebar').classList.remove('open'); $('#scrim').hidden = true; }
 
 // ── Notifications ───────────────────────────────────────────────────────────
 async function showNotifications(anchor) {
@@ -213,7 +208,7 @@ function showAccount(anchor) {
       <button class="menu-item hide-mobile" data-palette type="button">${icon('search')} Search <kbd>⌘K</kbd></button>
       <button class="menu-item" data-switch type="button">${icon('swap')} Switch account</button>
       <button class="menu-item" data-signout type="button">${icon('logout')} Sign out</button>
-    </div>`, { align: anchor.closest('.sidebar') || anchor.closest('.tabbar') ? 'left' : 'right' });
+    </div>`, { align: 'right' });
   pop.onclick = (e) => {
     const b = e.target.closest('[data-theme-set]');
     if (!b) return;
@@ -245,7 +240,7 @@ async function showSignin() {
   state.meta = meta;
   const roleTag = (u) => html`<span class="tag">${ROLE_SHORT[u.role]}</span>`;
   const blurb = {
-    MANAGEMENT: 'Approve or reject proposals, verify claims',
+    ADMINISTRATION: 'Approve or reject proposals, verify claims',
     UHC: 'Oversee your house across all regions',
   };
   const acct = (u, note) => html`<button class="acct" type="button" data-uid="${u.id}">
@@ -262,7 +257,7 @@ async function showSignin() {
           <ol class="signin-steps">
             <li><span>1</span><div><strong>Propose</strong><small>Venue, date, budget and agenda in one form.</small></div></li>
             <li><span>2</span><div><strong>Bring in co-hosts</strong><small>Invite LHCs from your region, any house.</small></div></li>
-            <li><span>3</span><div><strong>Approve and reimburse</strong><small>Management decides, then verifies your bills.</small></div></li>
+            <li><span>3</span><div><strong>Approve and reimburse</strong><small>Administration decides, then verifies your bills.</small></div></li>
           </ol>
           <div class="crest-ring">${meta.houses.map((h) => html`<img src="/static/img/houses/${h.slug}.png" alt="${h.name}" title="${h.name}">`)}</div>
         </div>
@@ -320,13 +315,11 @@ function startApp(user) {
 async function boot() {
   on(document, 'click', '[data-action]', (e, el) => {
     const a = el.dataset.action;
-    if (a === 'drawer') openDrawer();
-    if (a === 'palette') { closeDrawer(); openPalette(); }
+    if (a === 'palette') openPalette();
     if (a === 'collapse') toggleSidebar();
     if (a === 'notifications') { e.stopPropagation(); $('#popover').hidden ? showNotifications(el) : closePopover(); }
-    if (a === 'account') { e.stopPropagation(); $('#popover').hidden ? (closeDrawer(), showAccount(el)) : closePopover(); }
+    if (a === 'account') { e.stopPropagation(); $('#popover').hidden ? showAccount(el) : closePopover(); }
   });
-  $('#scrim').addEventListener('click', closeDrawer);
   window.addEventListener('hashchange', route);
   window.addEventListener('auth:expired', () => { if (state.user) { state.user = null; showSignin(); } });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && state.user) refreshBadges(); });

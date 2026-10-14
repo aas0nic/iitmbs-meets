@@ -1,4 +1,4 @@
-"""Meetup lifecycle: propose → peer review → management review → completion.
+"""Meetup lifecycle: propose → peer review → Administration review → completion.
 
     DRAFT ──submit──▶ PEER_REVIEW ──(all peers answered | host fast-forwards)──▶ PENDING
       ▲                  │                                                       │
@@ -18,7 +18,7 @@ from flask import Blueprint, abort, jsonify, request
 from ..auth import current_user, login_required
 from ..db import get_db, one, rows, utcnow
 from .common import (BUDGET_PER_HEAD, CATEGORIES, PROPOSER_ROLES, INVITES_OPEN, TIME_RE, clean_int, clean_text, get_visible_meetup,
-                     house_uhc_ids, log_activity, management_ids, notify, today_iso, visibility_clause)
+                     house_uhc_ids, log_activity, administration_ids, notify, today_iso, visibility_clause)
 
 bp = Blueprint('meetups', __name__, url_prefix='/api')
 
@@ -53,21 +53,21 @@ def list_meetups(user, where='1=1', params=(), order='m.event_date DESC', limit=
 def permissions(m, user, my_invite):
     role, uid = user['role'], user['id']
     is_host = m['proposer_id'] == uid
-    is_mgmt = role == 'MANAGEMENT'
+    is_admin = role == 'ADMINISTRATION'
     past = m['event_date'] <= today_iso()
     status = m['status']
     return {
         'edit': is_host and status in ('DRAFT', 'REJECTED'),
         'delete': is_host and status == 'DRAFT',
         'submit': is_host and status in ('DRAFT', 'REJECTED'),
-        'send_to_management': is_host and status == 'PEER_REVIEW',
+        'send_to_administration': is_host and status == 'PEER_REVIEW',
         'withdraw': is_host and status in ('PEER_REVIEW', 'PENDING'),
-        'review': is_mgmt and status == 'PENDING',
-        'complete': status == 'APPROVED' and (is_mgmt or (is_host and past)),
-        'cancel': status in ('PEER_REVIEW', 'PENDING', 'APPROVED') and (is_mgmt or is_host),
+        'review': is_admin and status == 'PENDING',
+        'complete': status == 'APPROVED' and (is_admin or (is_host and past)),
+        'cancel': status in ('PEER_REVIEW', 'PENDING', 'APPROVED') and (is_admin or is_host),
         'respond': bool(my_invite) and status in INVITES_OPEN,
         'comment': status != 'DRAFT' and (
-            is_mgmt or is_host or bool(my_invite)
+            is_admin or is_host or bool(my_invite)
             or (role == 'UHC' and user['house_id'] == m['house_id'])),
         'file_claim': is_host and (status == 'COMPLETED' or (status == 'APPROVED' and past)),
     }
@@ -168,8 +168,8 @@ def parse_collab(data):
 def invitable_clause(host):
     """Who `host` may invite: LHC → LHCs of the same region; UHC → other UHC members (any house)."""
     if host['role'] == 'UHC':
-        return "u.role = 'UHC' AND u.id <> ?", [host['id']]
-    return "u.role = 'LHC' AND u.region_id = ? AND u.id <> ?", [host['region_id'], host['id']]
+        return "u.role = 'UHC' AND u.is_active = 1 AND u.id <> ?", [host['id']]
+    return "u.role = 'LHC' AND u.is_active = 1 AND u.region_id = ? AND u.id <> ?", [host['region_id'], host['id']]
 
 
 def _sync_invitations(meetup_id, host, invitee_ids):
@@ -210,7 +210,7 @@ def _submit(m, host, resubmit):
         notify(waiting, 'Co-host invitation',
                f'{host["name"]} invited you to co-host "{m["title"]}".', m['id'])
     if new_status == 'PENDING':
-        notify(management_ids(), 'New proposal to review',
+        notify(administration_ids(), 'New proposal to review',
                f'"{m["title"]}" from {region} is waiting for a decision.', m['id'])
     notify(house_uhc_ids(m['house_id']), f'New {host["house_name"]} proposal',
            f'{host["name"]} ({region}) {"re" if resubmit else ""}submitted "{m["title"]}".', m['id'])
@@ -220,8 +220,8 @@ def _submit(m, host, resubmit):
 def _move_to_pending(m, actor_id, note=None):
     db = get_db()
     db.execute("UPDATE meetups SET status = 'PENDING', updated_at = ? WHERE id = ?", (utcnow(), m['id']))
-    log_activity(m['id'], actor_id, 'SENT_TO_MANAGEMENT', note)
-    notify(management_ids(), 'New proposal to review', f'"{m["title"]}" is waiting for a decision.', m['id'])
+    log_activity(m['id'], actor_id, 'SENT_TO_ADMINISTRATION', note)
+    notify(administration_ids(), 'New proposal to review', f'"{m["title"]}" is waiting for a decision.', m['id'])
 
 
 # ── Read ────────────────────────────────────────────────────────────────────
@@ -394,12 +394,12 @@ def submit(meetup_id):
     return jsonify(status=status)
 
 
-@bp.post('/meetups/<int:meetup_id>/send-to-management')
+@bp.post('/meetups/<int:meetup_id>/send-to-administration')
 @login_required(*PROPOSER_ROLES)
-def send_to_management(meetup_id):
+def send_to_administration(meetup_id):
     user = current_user()
     m = get_visible_meetup(meetup_id, user)
-    require(m, user, 'send_to_management')
+    require(m, user, 'send_to_administration')
     _move_to_pending(m, user['id'], 'Sent without waiting for remaining co-host replies.')
     get_db().commit()
     return jsonify(status='PENDING')
@@ -419,7 +419,7 @@ def withdraw(meetup_id):
 
 
 @bp.post('/meetups/<int:meetup_id>/review')
-@login_required('MANAGEMENT')
+@login_required('ADMINISTRATION')
 def review(meetup_id):
     user = current_user()
     m = get_visible_meetup(meetup_id, user)
@@ -528,7 +528,7 @@ def respond(meetup_id):
     notify([m['proposer_id']], f'Invitation {status.lower()}',
            f'{user["name"]} {status.lower()} your co-host invitation for "{m["title"]}".', meetup_id)
 
-    # Last outstanding reply moves the proposal on to Management automatically.
+    # Last outstanding reply moves the proposal on to Administration automatically.
     if m['status'] == 'PEER_REVIEW':
         waiting = db.execute("SELECT COUNT(*) FROM meetup_invitations WHERE meetup_id = ? AND status = 'INVITED'",
                              (meetup_id,)).fetchone()[0]

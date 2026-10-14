@@ -69,6 +69,7 @@
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
       <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
       <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
       <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
       <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></symbol>
       <symbol id="i-palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="1.2"/><circle cx="17.5" cy="10.5" r="1.2"/><circle cx="8.5" cy="7.5" r="1.2"/><circle cx="6.5" cy="12.5" r="1.2"/><path d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.3A5.7 5.7 0 0 0 22 9.7C22 5.4 17.5 2 12 2z"/></symbol>
@@ -102,20 +103,11 @@
         <a class="nav-link" data-nav="settings" href="#/settings" data-tip="Settings">
           <svg class="i"><use href="#i-settings"/></svg><span class="nav-label">Settings</span>
         </a>
-        <button class="side-account" data-action="account" type="button" data-tip="Account">
-          <span id="sidebarAvatar" class="nav-avatar"></span>
-          <span class="side-account-text"><strong id="sidebarName"></strong><small id="sidebarRole"></small></span>
-          <svg class="i i-sm side-account-chev"><use href="#i-chevron-down"/></svg>
-        </button>
       </div>
     </aside>
-    <div id="scrim" class="scrim" hidden></div>
 
     <div class="main">
       <header class="topbar">
-        <button class="icon-btn only-mobile" data-action="drawer" type="button" aria-label="Open menu">
-          <svg class="i"><use href="#i-menu"/></svg>
-        </button>
         <a class="topbar-brand only-mobile" href="#/home">
           <img src="/static/img/iitm_logo.png" alt="" width="26" height="26">
           <span>Meetup Planner</span>

@@ -1,6 +1,6 @@
 """Demo roster and meetups.
 
-Roster: 12 houses × (3 UHC + 10 LHC) = 36 UHC + 120 LHC, plus Management.
+Roster: 12 houses × (3 UHC + 10 LHC) = 36 UHC + 120 LHC, plus Administration.
 LHC member n of every house sits in region n, so each region has exactly
 12 LHCs — one from each house.
 
@@ -64,7 +64,7 @@ NAMED = {
     'uhc-11-1': 'Vikram Rao',
 }
 
-DEMO_ACCOUNTS = ['mgmt-1', 'uhc-11-1', 'lhc-11-5', 'lhc-2-5']
+DEMO_ACCOUNTS = ['admin-1', 'uhc-11-1', 'lhc-11-5', 'lhc-2-5']
 
 BUDGET_PER_HEAD = 200  # standard allowance in ₹ per expected attendee; keep in sync with portal/api/common.py
 
@@ -86,9 +86,9 @@ def seed(conn):
     c.executemany(
         'INSERT INTO users (id, name, email, role, title) VALUES (?,?,?,?,?)',
         [
-            ('mgmt-1', 'Dr. Meera Krishnan', 'activities.faculty@study.iitm.ac.in', 'MANAGEMENT',
+            ('admin-1', 'Dr. Meera Krishnan', 'activities.faculty@study.iitm.ac.in', 'ADMINISTRATION',
              'Faculty-in-charge, Student Activities'),
-            ('mgmt-2', 'Arvind Subramanian', 'activities.office@study.iitm.ac.in', 'MANAGEMENT',
+            ('admin-2', 'Arvind Subramanian', 'activities.office@study.iitm.ac.in', 'ADMINISTRATION',
              'Student Activities Office'),
         ],
     )
@@ -114,7 +114,9 @@ def seed(conn):
         for n in range(1, 4):
             uid = f'uhc-{h_id}-{n}'
             r = roll(rng.choice([21, 22]))
-            users.append((uid, NAMED.get(uid) or fresh_name(), f'{r}@ds.study.iitm.ac.in', 'UHC',
+            # UHC seats have fixed position emails that pass to each newly elected member.
+            seat_email = f"{HOUSES[h_id - 1][1]}.{UHC_TITLES[n - 1].lower().replace(' ', '')}@study.iitm.ac.in"
+            users.append((uid, NAMED.get(uid) or fresh_name(), seat_email, 'UHC',
                           UHC_TITLES[n - 1], h_id, None, r))
         for n in range(1, 11):
             uid = f'lhc-{h_id}-{n}'
@@ -197,7 +199,7 @@ def seed(conn):
             activity(mid, review[0], 'APPROVED' if status in ('APPROVED', 'COMPLETED') else 'REJECTED',
                      reviewed_at, review[1])
         if status == 'COMPLETED':
-            activity(mid, 'mgmt-2', 'COMPLETED', now - timedelta(days=max(-offset - 1, 0)))
+            activity(mid, 'admin-2', 'COMPLETED', now - timedelta(days=max(-offset - 1, 0)))
 
         if claim:
             amount, approved, attendance, _att_notes, exp_notes, _payout, c_status, c_notes, files = claim
@@ -210,7 +212,7 @@ def seed(conn):
                    VALUES (?,?,?,?,?,?,?,'SELF',?,?,?,?,?,?,?,?,?,?,?)''',
                 (mid, proposer, amount, approved, attendance, exp_notes,
                  f'https://www.instagram.com/p/demo{mid:04d}/', proposer, *bank, c_status, c_notes,
-                 'mgmt-1' if c_status != 'PENDING_REVIEW' else None,
+                 'admin-1' if c_status != 'PENDING_REVIEW' else None,
                  _ts(filed + timedelta(days=1)) if c_status != 'PENDING_REVIEW' else None, _ts(filed)))
             claim_id = c.lastrowid
             c.executemany('INSERT OR IGNORE INTO claim_attendees (claim_id, name, email) VALUES (?,?,?)',
@@ -223,7 +225,7 @@ def seed(conn):
                           'VALUES (?,?,?,?,?)', (claim_id, fname, f'sample-{claim_id}-{fname}', 0, _ts(filed)))
             activity(mid, proposer, 'CLAIM_FILED', filed, f'₹{amount:,} for {attendance} attendees')
             if c_status != 'PENDING_REVIEW':
-                activity(mid, 'mgmt-1', f'CLAIM_{c_status}', filed + timedelta(days=1), c_notes)
+                activity(mid, 'admin-1', f'CLAIM_{c_status}', filed + timedelta(days=1), c_notes)
         return mid
 
     # Mumbai — the walkthrough region
@@ -249,7 +251,7 @@ def seed(conn):
         'WeWork Enam Sambhav, BKC, Mumbai', 50, 0, None,
         'APPROVED',
         invites=[('lhc-11-5', 'ACCEPTED', 'In. I will handle registrations at the door.')],
-        review=('mgmt-1', 'Approved. Please keep an attendance sheet at the entrance.', 2),
+        review=('admin-1', 'Approved. Please keep an attendance sheet at the entrance.', 2),
         created_days_ago=9,
         collab={'type': 'EXTERNAL', 'name': 'Mumbai Data Circle',
                 'about': 'A volunteer-run community of data professionals in Mumbai that hosts monthly talks.',
@@ -271,7 +273,7 @@ def seed(conn):
         'Carter Road Amphitheatre, Bandra, Mumbai', 30, 0, None,
         'COMPLETED',
         invites=[('lhc-2-5', 'ACCEPTED', 'Will bring the welcome kit.')],
-        review=('mgmt-1', 'Approved.', 1), created_days_ago=30)
+        review=('admin-1', 'Approved.', 1), created_days_ago=30)
 
     # Other regions
     meetup(
@@ -293,7 +295,7 @@ def seed(conn):
         'CULTURAL', 6, '16:00', '19:30',
         'IIT Madras campus, near Gajendra Circle', 40, 0, None,
         'REJECTED',
-        review=('mgmt-1', 'Campus venues need clearance from the Dean of Students office at least 14 days in advance. '
+        review=('admin-1', 'Campus venues need clearance from the Dean of Students office at least 14 days in advance. '
                           'Please resubmit with the clearance letter or pick an off-campus venue.', 1),
         created_days_ago=5)
 
@@ -304,7 +306,7 @@ def seed(conn):
         'Koramangala Community Centre, Bengaluru', 30, 0, None,
         'COMPLETED',
         invites=[('lhc-4-3', 'ACCEPTED', 'I will run the graphs table.')],
-        review=('mgmt-1', 'Approved.', 2), created_days_ago=28,
+        review=('admin-1', 'Approved.', 2), created_days_ago=28,
         claim=(2450, None, 28, '28 students signed in; QR sign-in sheet and group photo attached.',
                'Refreshments for 28 (₹1,750), markers and pads (₹350), HDMI adapter (₹350).',
                'UPI: karthik.blr@okaxis', 'PENDING_REVIEW', None,
@@ -315,7 +317,7 @@ def seed(conn):
         'Reading "Attention Is All You Need" together, then a code-along building a tiny transformer.',
         'STUDY_JAM', -22, '11:00', '15:00',
         'T-Hub Phase 2, Knowledge City, Hyderabad', 25, 0, None,
-        'COMPLETED', review=('mgmt-1', 'Approved.', 1), created_days_ago=40,
+        'COMPLETED', review=('admin-1', 'Approved.', 1), created_days_ago=40,
         claim=(1800, 1800, 24, 'Paper sign-in sheet, 24 names.', 'T-Hub cafe snack boxes (₹1,800).',
                'HDFC A/C ending 1029', 'APPROVED', 'Bills match GST invoice. Approved for transfer.',
                ['thub-cafe-receipt.pdf']))
@@ -325,7 +327,7 @@ def seed(conn):
         'Previous-year Stats 2 problems worked through in small groups.',
         'STUDY_JAM', -35, '10:00', '13:00',
         'Lucknow Startup Hub, Gomti Nagar', 18, 0, None,
-        'COMPLETED', review=('mgmt-2', 'Approved.', 3), created_days_ago=50,
+        'COMPLETED', review=('admin-2', 'Approved.', 3), created_days_ago=50,
         claim=(900, None, 16, 'Sign-in sheet attached.', 'Tea and snacks (₹900).', 'UPI: lko.lhc@ybl',
                'IN_PROGRESS', 'Forwarded to Institute Accounts.', ['tea-stall-bill.jpg']))
 
@@ -334,14 +336,14 @@ def seed(conn):
         'Pick a good-first-issue in a Python project and get a PR open by the end of the day.',
         'HACKATHON', 16, '13:00', '18:00',
         'Webel IT Park, Salt Lake, Kolkata', 30, 0, None,
-        'APPROVED', review=('mgmt-1', 'Approved. Keep an attendance sheet.', 2), created_days_ago=8)
+        'APPROVED', review=('admin-1', 'Approved. Keep an attendance sheet.', 2), created_days_ago=8)
 
     meetup(
         'lhc-4-7', 'Maths 2 proofs practice',
         'Small-group practice on proof techniques and previous-year Maths 2 questions.',
         'STUDY_JAM', 19, '11:00', '15:00',
         'Bihar Startup Hub, Fraser Road, Patna', 20, 0, None,
-        'APPROVED', review=('mgmt-2', 'Approved.', 1), created_days_ago=6)
+        'APPROVED', review=('admin-2', 'Approved.', 1), created_days_ago=6)
 
     meetup(
         'lhc-7-8', 'Chandigarh SQL and DBMS revision evening',
@@ -354,7 +356,7 @@ def seed(conn):
         'In-person meetup for BS students in the UAE. Group discussion of a BDM case, then dinner together.',
         'NETWORKING', 5, '18:30', '20:00',
         'Dubai Knowledge Park, Block 2, Dubai', 24, 1500, 'Private area booking at the café.',
-        'APPROVED', review=('mgmt-1', 'Approved.', 1), created_days_ago=7)
+        'APPROVED', review=('admin-1', 'Approved.', 1), created_days_ago=7)
 
     meetup(
         'lhc-11-2', 'Chennai Sundarbans house meetup at Besant Nagar',
@@ -370,7 +372,7 @@ def seed(conn):
         'Box cricket followed by lunch. Teams mixed across houses.',
         'SPORTS', -3, '07:30', '11:30',
         'Turf Park, HSR Layout, Bengaluru', 24, 2400, 'Turf booking for four hours.',
-        'APPROVED', review=('mgmt-1', 'Approved. Ensure everyone signs the participation waiver.', 2),
+        'APPROVED', review=('admin-1', 'Approved. Ensure everyone signs the participation waiver.', 2),
         created_days_ago=20)
 
     # A UHC-led meetup: UHC members can propose in any region and co-host with UHC members of other houses.
@@ -405,12 +407,12 @@ def seed(conn):
         budget = BUDGET_PER_HEAD * attendees + extra
         review = None
         if status == 'REJECTED':
-            review = ('mgmt-1', rng.choice([
+            review = ('admin-1', rng.choice([
                 'Clashes with the end-term exam window. Please pick a date after exams.',
                 'Venue details are incomplete. Add the full address and booking confirmation.',
                 'Budget is above the per-meetup limit for this attendance. Please revise.']), 2)
         elif status in ('COMPLETED', 'CANCELLED'):
-            review = ('mgmt-1', 'Approved.', 1)
+            review = ('admin-1', 'Approved.', 1)
         claim = None
         if status == 'COMPLETED' and budget and rng.random() < 0.8:
             spent = budget - rng.randrange(200, 1500, 50)
@@ -435,8 +437,8 @@ def seed(conn):
         ('lhc-2-5', 'Co-host invitation', 'Rahul Verma invited you to co-host "PDSA study jam and mock OPPE".', m_rahul, 1),
         ('lhc-11-5', 'Invitation accepted', 'Amit Kulkarni accepted your co-host invitation for "PDSA study jam and mock OPPE".', m_rahul, 1),
         ('lhc-11-5', 'Invitation declined', 'Vikrant Joshi declined your co-host invitation for "PDSA study jam and mock OPPE".', m_rahul, 1),
-        ('mgmt-1', 'New proposal to review', 'Delhi NCR project review circle was submitted by an LHC in Delhi NCR.', None, 3),
-        ('mgmt-1', 'Claim filed', 'A ₹2,450 claim was filed for "Python and DSA offline bootcamp".', None, 7),
+        ('admin-1', 'New proposal to review', 'Delhi NCR project review circle was submitted by an LHC in Delhi NCR.', None, 3),
+        ('admin-1', 'Claim filed', 'A ₹2,450 claim was filed for "Python and DSA offline bootcamp".', None, 7),
         ('uhc-11-1', 'New Sundarbans proposal', 'A Sundarbans LHC in Chennai proposed "Chennai Sundarbans house meetup at Besant Nagar".', None, 2),
     ]
     for uid, title, body, mid, days_ago in notes:

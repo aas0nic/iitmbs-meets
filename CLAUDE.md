@@ -16,7 +16,7 @@
 >
 > `WORKFLOW.md` is the **single authoritative source of truth** for:
 > 1. Complete institutional hierarchy (12 Houses & 10 Geographic Regions).
-> 2. Role-Based Access Control (RBAC) permissions matrix across Management, UHC, and LHC.
+> 2. Role-Based Access Control (RBAC) permissions matrix across Administration, UHC, and LHC.
 > 3. Meetup proposal state transition lifecycle (`DRAFT` → `PEER_REVIEW` → `PENDING` → `APPROVED` / `REJECTED` → `COMPLETED`).
 > 4. Regional peer invitation constraints and rules.
 > 5. Post-meetup reimbursement verification workflow.
@@ -27,7 +27,7 @@
 
 ## 1. Project Overview
 
-The **IIT Madras BS Degree Meetup Approval Portal** is an institutional governance and event management platform. It allows Lower House Council (LHC) representatives across India and abroad to propose, co-host, and manage local student meetups, while providing the central Management team with review, approval, budget tracking, and reimbursement oversight.
+The **IIT Madras BS Degree Meetup Approval Portal** is an institutional governance and event management platform. It allows Lower House Council (LHC) representatives across India and abroad to propose, co-host, and manage local student meetups, while providing the central Administration team with review, approval, budget tracking, and reimbursement oversight.
 
 ### Tech Stack
 - **Backend**: Python 3.8+ / Flask, organised as the `portal/` package (app factory in `portal/__init__.py`, entry point `app.py`)
@@ -44,7 +44,7 @@ The **IIT Madras BS Degree Meetup Approval Portal** is an institutional governan
 - **Horizontal Axis (10 Geographic Regions)**: Delhi (NCR), Chennai, Bengaluru, Hyderabad, Mumbai, Kolkata, Patna, Chandigarh, Lucknow, International.
 
 ### 2.2 User Hierarchy (Total: 157+ Roster)
-1. **Management (Central Authority)**:
+1. **Administration (Central Authority)**:
    - Final authority to approve or reject meetups (with mandatory feedback).
    - Reviews and verifies post-meetup reimbursement claims.
    - Can inspect global analytics across all 12 houses and 10 regions.
@@ -57,16 +57,18 @@ The **IIT Madras BS Degree Meetup Approval Portal** is an institutional governan
 
 ### 2.3 Strict Business Constraints (Do NOT violate)
 - **Regional Peer Co-Hosting Rule**: When an LHC proposes a meetup, they can **ONLY** invite fellow LHC members from their **exact same geographic region** (`region_id`), regardless of house. Cross-region LHC invites are disallowed. (UHC proposers invite UHC members instead — see below.)
-- **Peer Review Threshold**: If peer invites are issued, the meetup stays in `PEER_REVIEW` until peers accept/decline, or the host fast-forwards submission to Management review (`PENDING`).
-- **Management Feedback**: Rejection by Management requires mandatory explanation text stored in `review_comments`.
+- **Peer Review Threshold**: If peer invites are issued, the meetup stays in `PEER_REVIEW` until peers accept/decline, or the host fast-forwards submission to Administration review (`PENDING`).
+- **Administration Feedback**: Rejection by Administration requires mandatory explanation text stored in `review_comments`.
 - **UHC Proposals**: UHC members can also propose meetups, in **any** of the 10 regions (they pick `region_id`), and can only invite **other UHC members** (any house) as co-hosts. LHCs still propose for their own region and invite same-region LHCs. See `invitable_clause()` in `portal/api/meetups.py`.
 - **Collaboration**: `collab_type` is `NONE`, `SOCIETY` (IITM BS society) or `EXTERNAL` (outside body). For SOCIETY/EXTERNAL, name, plan/agenda and point of contact are mandatory; EXTERNAL also requires "about the organisation" and a sponsorship yes/no, with details when yes.
 - **Mandatory Fields**: Every proposal field is required (including the backup date) except co-hosts and the collaboration block. The form validates client-side, marks each missing field inline and scrolls/focuses to the first; the server re-validates everything.
 - **Payout Details**: LHC/UHC members can save default bank details (`payout_details` table, `/api/me/payout`).
-- **Claims**: filed on a full page (`#/meetups/:id/claim`) with an attendee list (manual or CSV/XLSX import via `/api/attendees/parse`), amount suggested at ₹200 × attendees (overrun allowed), receipts, a post link, and a payee: SELF (saved back to profile), OTHER (typed details), or COHOST (accepted co-host from another house; their saved details are hidden from the claimant and they must confirm before Management sees the claim). Bank fields are only returned to Management, the payee, and the claimant for SELF/OTHER (`claims.present()`).
-- **Insights per role**: Management → institute-wide (`/api/stats`); UHC → own house (`/api/insights/house`); LHC → self + region (`/api/insights/me`).
+- **Claims**: filed on a full page (`#/meetups/:id/claim`) with an attendee list (manual or CSV/XLSX import via `/api/attendees/parse`), amount suggested at ₹200 × attendees (overrun allowed), receipts, a post link, and a payee: SELF (saved back to profile), OTHER (typed details), or COHOST (accepted co-host from another house; their saved details are hidden from the claimant and they must confirm before Administration sees the claim). Bank fields are only returned to Administration, the payee, and the claimant for SELF/OTHER (`claims.present()`).
+- **People & access (Administration only)**: `#/people` / `portal/api/people.py`. Edit LHC email (student ID), roll, house, region; hand over UHC seats (fixed position emails, change holder name/roll); turn portal access on/off (`users.is_active`); add people; CSV export; CSV/XLSX import with preview → apply.
+- **Naming**: the top tier is **Administration** in UI and code (role key `ADMINISTRATION`, demo ids `admin-1`/`admin-2`).
+- **Insights per role**: Administration → institute-wide (`/api/stats`); UHC → own house (`/api/insights/house`); LHC → self + region (`/api/insights/me`).
 - **Offline Only**: Every meetup is held in person at a physical venue (`venue` is required). There is no online/hybrid mode.
-- **Dates**: A proposal has a preferred date (`event_date`) and an optional backup date (`backup_date`). When approving, Management picks one; choosing the backup swaps the two so `event_date` is always the date on the calendar.
+- **Dates**: A proposal has a preferred date (`event_date`) and an optional backup date (`backup_date`). When approving, Administration picks one; choosing the backup swaps the two so `event_date` is always the date on the calendar.
 - **Budget**: Standard allowance is ₹200 × expected attendees (`BUDGET_PER_HEAD` in `portal/api/common.py`, mirrored in `portal/seed.py`). Hosts may request `extra_budget` on top (e.g. venue booking for large meetups) with a mandatory `extra_budget_note`. `budget_requested` = allowance + extra and is computed server-side, never taken from the client.
 - **Reimbursement Eligibility**: Only `APPROVED` or `COMPLETED` meetups can file expense claims with bill receipts.
 
@@ -87,9 +89,9 @@ The **IIT Madras BS Degree Meetup Approval Portal** is an institutional governan
 ### 3.2 Mobile Responsiveness Rules
 - Must maintain a **native-app feel on mobile devices** (`<768px` and 375px–430px iPhone viewports):
   - **Zero horizontal scroll/overflow** (`overflow-x: hidden`).
-  - Top bar (`.topbar`) with hamburger, brand, new-proposal shortcut, notifications and avatar.
-  - Off-canvas sidebar drawer (`.sidebar.open`) over a blurred scrim (`#scrim`).
-  - Bottom tab bar (`.tabbar`) with four role-specific destinations plus **Me** (account menu).
+  - **No sidebar on phones.** Top bar (`.topbar`) with brand, new-proposal shortcut, search, notifications and the avatar.
+  - Bottom tab bar (`.tabbar`) with five role-specific pages (no profile item).
+  - **The profile/account menu has exactly one entry point on every screen size: the avatar at the top right.** Don't add it to the sidebar or tab bar.
   - Dialogs (`<dialog id="dialog">`, opened with `openDialog()` in `ui.js`) render as bottom sheets on phones.
 
 ---
@@ -103,7 +105,7 @@ The **IIT Madras BS Degree Meetup Approval Portal** is an institutional governan
 | [`portal/__init__.py`](portal/__init__.py) | Flask app factory: config, blueprints, JSON error handling, asset versioning. |
 | [`portal/schema.sql`](portal/schema.sql) | All tables, CHECK constraints and indexes. Bump `SCHEMA_VERSION` in `portal/db.py` after editing. |
 | [`portal/db.py`](portal/db.py) | Connections (per request via `flask.g`), schema version check, reset. |
-| [`portal/seed.py`](portal/seed.py) | 12 houses, 10 regions, 2 Management + 36 UHC + 120 LHC, sample meetups relative to today. |
+| [`portal/seed.py`](portal/seed.py) | 12 houses, 10 regions, 2 Administration + 36 UHC + 120 LHC, sample meetups relative to today. |
 | [`portal/auth.py`](portal/auth.py) | Session sign-in and `login_required(*roles)`. The acting user always comes from the session. |
 | [`portal/api/meetups.py`](portal/api/meetups.py) | Meetup lifecycle, `permissions()` (single source of who-can-do-what), invitations, comments. |
 | [`portal/api/claims.py`](portal/api/claims.py) | Reimbursement claims and receipt uploads (`data/uploads/`). |
@@ -132,11 +134,11 @@ python app.py
 ```
 Application URL: `http://127.0.0.1:5050`
 
-### Database Management
+### Database Administration
 - Database file is stored at `data/iitmbs_meets.db`.
 - To re-initialize seed data from scratch, either:
   - Delete `data/iitmbs_meets.db` and restart `app.py`.
-  - Or sign in as Management and use **Settings → Reset database**.
+  - Or sign in as Administration and use **Settings → Reset database**.
 - The database is rebuilt automatically when `SCHEMA_VERSION` in `portal/db.py` changes.
 
 ---
@@ -147,6 +149,6 @@ When working on this repository, Claude should follow these rules:
 
 1. **Check `WORKFLOW.md` first**: Do not invent new roles, bypass hierarchy checks, or alter status enums without ensuring consistency with [`WORKFLOW.md`](file:///Users/itz_ats_sama/iitmbs-meets/WORKFLOW.md).
 2. **Preserve RBAC**: Never read the acting user from a request body — use `current_user()` and `login_required(...)`. Lifecycle actions go through `permissions()` / `require()` in `portal/api/meetups.py`.
-3. **Maintain Mobile Parity**: Any new UI must work at all three tiers (sidebar ≥1180px, icon rail 768–1179px, phone <768px with drawer, bottom tab bar and bottom-sheet dialogs via `openDialog`).
+3. **Maintain Mobile Parity**: Any new UI must work at all three tiers (sidebar ≥1180px, icon rail 768–1179px, phone <768px with no sidebar, bottom tab bar and bottom-sheet dialogs via `openDialog`).
 4. **Cache Invalidation**: `?v={{ v }}` is the newest CSS/JS mtime; static files are served with `max-age=0` so modules revalidate. Import JS modules by relative path without a query string — importing `app.js` from a view would load a second copy of the app.
 5. **No Regressions on Assets**: Always use the authentic extracted circular crests in `static/img/houses/` rather than placeholder SVGs.

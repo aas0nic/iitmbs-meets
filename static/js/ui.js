@@ -95,8 +95,8 @@ export const STATUS = {
   DECLINED: 'Declined',
 };
 export const CLAIM_STATUS = { ...STATUS, APPROVED: 'Paid out', REJECTED: 'Rejected' };
-export const ROLE = { MANAGEMENT: 'Management', UHC: 'Upper House Council', LHC: 'Lower House Council' };
-export const ROLE_SHORT = { MANAGEMENT: 'Management', UHC: 'UHC', LHC: 'LHC' };
+export const ROLE = { ADMINISTRATION: 'Administration', UHC: 'Upper House Council', LHC: 'Lower House Council' };
+export const ROLE_SHORT = { ADMINISTRATION: 'Administration', UHC: 'UHC', LHC: 'LHC' };
 
 // ── Components ──────────────────────────────────────────────────────────────
 // Status glyphs: a ring that fills as a meetup moves forward (Draft → Co-hosts → Awaiting → Approved → Held).
@@ -128,12 +128,12 @@ export const crest = (slug, cls = '') => raw(`<img class="crest ${cls}" src="/st
 export const house = (slug, name) => html`<span class="house">${crest(slug)}<span>${name}</span></span>`;
 
 export function avatar(user, size = '') {
-  const color = user.house_color || (user.role === 'MANAGEMENT' ? 'var(--accent)' : '#8C8798');
+  const color = user.house_color || (user.role === 'ADMINISTRATION' ? 'var(--accent)' : '#8C8798');
   return html`<span class="avatar ${size}" style="--c:${color}" aria-hidden="true">${initials(user.name || '?')}</span>`;
 }
 
 export function userLine(u) {
-  if (u.role === 'MANAGEMENT') return u.title || 'Management';
+  if (u.role === 'ADMINISTRATION') return u.title || 'Administration';
   if (u.role === 'UHC') return `${u.house_name} · UHC ${u.title || ''}`.trim();
   return `${u.house_name} · ${u.region_name}`;
 }

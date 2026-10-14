@@ -17,7 +17,7 @@ const ok = (cond, label, detail = '') => {
 const toasts = () => ev(`return [...document.querySelectorAll('.toast')].map(t => t.innerText).join(' | ')`);
 const click = (sel) => ev(`document.querySelector(${JSON.stringify(sel)}).click()`);
 const resetData = async () => {
-  await page.login('mgmt-1');
+  await page.login('admin-1');
   await ev(`await fetch('/api/admin/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({confirm:'RESET'})})`);
 };
 // Fill inputs and fire the events the app listens to.
@@ -50,8 +50,8 @@ try {
   await ev(`document.querySelector('[data-invite="${mid}"] [data-respond=ACCEPT]').click()`); await sleep(1200);
   ok((await toasts()).includes('co-host'), 'co-host accepts from Home');
 
-  // ── Management decision ──
-  await page.login('mgmt-1', { route: `/meetups/${mid}` });
+  // ── Administration decision ──
+  await page.login('admin-1', { route: `/meetups/${mid}` });
   await click('[data-decide=REJECT]'); await sleep(300);
   ok((await toasts()).includes('feedback'), 'reject without feedback is blocked');
   await ev(`document.querySelector('[name=date_choice][value=BACKUP]').click()`);
@@ -73,10 +73,10 @@ try {
   ok((await toasts()).includes('Claim submitted'), 'claim filed (pay to self)');
   ok(await ev(`return (await (await fetch('/api/me/payout')).json()).payout?.account_number === '123456789012'`), 'own bank details saved to profile');
 
-  // ── Management pays out ──
-  await page.login('mgmt-1', { route: '/claims' });
+  // ── Administration pays out ──
+  await page.login('admin-1', { route: '/claims' });
   await ev(`[...document.querySelectorAll('[data-claim]')].find(r => r.innerText.includes('E2E study jam')).click()`); await sleep(900);
-  ok((await ev(`return document.querySelector('#dialog').innerText`)).includes('3 students attended'), 'Management sees attendee list');
+  ok((await ev(`return document.querySelector('#dialog').innerText`)).includes('3 students attended'), 'Administration sees attendee list');
   await click('#dialog [data-submit]'); await sleep(1300);
   ok((await toasts()).includes('approved for payout'), 'claim paid out');
 
@@ -92,7 +92,7 @@ try {
   await page.login('lhc-2-5');
   await ev(`[...document.querySelectorAll('.task')].find(t => t.innerText.includes('Confirm your bank')).querySelector('a.btn').click()`); await sleep(1400);
   await click('[data-payee=CONFIRM]'); await sleep(1200);
-  ok((await toasts()).includes('with Management'), 'co-host confirms payout details');
+  ok((await toasts()).includes('with Administration'), 'co-host confirms payout details');
 
   // ── UHC proposes in another region with an external collaboration ──
   await page.login('uhc-11-1', { route: '/new' });
@@ -110,16 +110,39 @@ try {
   ok((await ev(`return document.querySelector('.page-title').innerText`)).includes('Sundarbans insights'), 'UHC sees house insights');
   await page.login('lhc-11-5', { route: '/insights' });
   ok((await ev(`return document.querySelector('.page-title').innerText`)) === 'Your insights', 'LHC sees personal insights');
-  await page.login('mgmt-1', { route: '/insights' });
-  ok(await ev(`return !!document.querySelector('.heat')`), 'Management sees house × region heatmap');
+  await page.login('admin-1', { route: '/insights' });
+  ok(await ev(`return !!document.querySelector('.heat')`), 'Administration sees house × region heatmap');
 
   // ── Shell ──
   await ev(`document.dispatchEvent(new KeyboardEvent('keydown', {key: 'k', metaKey: true}))`); await sleep(200);
   ok(await ev(`return !document.querySelector('#palette').hidden`), '⌘K palette opens');
-  await page.size(390, 844); await page.go('/home');
-  await click('[data-action=drawer]'); await sleep(300);
-  ok(await ev(`return document.querySelector('#sidebar').classList.contains('open')`), 'phone drawer opens');
+  // ── People & access (Administration) ──
+  await page.go('/people'); await sleep(400);
+  ok((await ev(`return document.querySelector('.page-title').innerText`)) === 'People & access', 'Administration opens People & access');
+  await ev(`[...document.querySelectorAll('[data-tab]')].find(b => b.dataset.tab === 'UHC').click()`); await sleep(800);
+  await ev(`document.querySelector('[data-edit="uhc-11-1"]').click()`); await sleep(300);
+  await fill('#dialog form', { name: 'Neha Iyer', roll_number: '24f1009999' });
+  await click('#dialog [data-submit]'); await sleep(1000);
+  const seat = await ev(`return (await (await fetch('/api/admin/people?role=UHC&house_id=11')).json()).people.find(p => p.id === 'uhc-11-1')`);
+  ok(seat.name === 'Neha Iyer' && seat.email === 'sundarbans.secretary@study.iitm.ac.in', 'UHC seat handed over, seat email kept');
+  await click('[data-import]'); await sleep(300);
+  await attachFile('[data-people-file]', 'people.csv',
+    'Role,Name,Email,Roll number,House,Region,Position,Access\nLHC,E2E Student,24f3999001@ds.study.iitm.ac.in,24f3999001,Gir,Chennai,,On\nLHC,Bad Region,24f3999002@ds.study.iitm.ac.in,24f3999002,Gir,Pune,,On\n', 'text/csv');
+  await sleep(900);
+  ok((await ev(`return document.querySelector('.import-summary').innerText`)).includes('1 new'), 'import preview shows 1 new + 1 error');
+  await click('#dialog [data-submit]'); await sleep(1000);
+  ok((await toasts()).includes('1 added'), 'import applied');
+  await ev(`await fetch('/api/admin/people/lhc-8-5', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({is_active: 0})})`);
+  ok(await ev(`return (await fetch('/api/session', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user_id:'lhc-8-5'})})).status === 403`), 'access off blocks sign-in');
+
+  await page.size(390, 844); await page.login('admin-1');
+  ok(await ev(`return getComputedStyle(document.querySelector('#sidebar')).display === 'none'`), 'phone has no sidebar');
+  ok(await ev(`return document.querySelectorAll('.tabbar a').length === 5 && !document.querySelector('.tabbar [data-action=account]')`), 'phone tab bar: 5 pages, no profile');
+  await click('.topbar [data-action=account]'); await sleep(300);
+  ok(await ev(`return !document.querySelector('#popover').hidden`), 'profile menu opens from the top bar');
   ok(!(await ev('return document.documentElement.scrollWidth > innerWidth')), 'no horizontal overflow on phone');
+  await page.size(1280, 900); await page.go('/home');
+  ok(await ev(`return document.querySelectorAll('[data-action=account]').length === 1`), 'one profile entry point on desktop (top right)');
 
   ok(!page.errors.length, 'no JavaScript errors', page.errors.join('\n'));
   console.log(`\nAll ${step} checks passed.`);

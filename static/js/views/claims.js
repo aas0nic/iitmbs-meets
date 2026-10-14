@@ -1,4 +1,4 @@
-// Reimbursement claims: Management verifies, UHC reads their house, LHC tracks their own.
+// Reimbursement claims: Administration verifies, UHC reads their house, LHC tracks their own.
 import { api } from '../api.js';
 import {
   $, CLAIM_STATUS, empty, fmtDate, formData, fullTime, house, html, icon, on, openDialog, plural, rupees, status, toast,
@@ -15,7 +15,7 @@ export async function render(el, ctx) {
   const { user, query } = ctx;
   ctx.setTitle('Reimbursements');
   const reqs = [api.get('/api/claims')];
-  if (user.role !== 'MANAGEMENT') reqs.push(api.get('/api/meetups', { mine: 1, status: 'COMPLETED,APPROVED', when: 'past' }));
+  if (user.role !== 'ADMINISTRATION') reqs.push(api.get('/api/meetups', { mine: 1, status: 'COMPLETED,APPROVED', when: 'past' }));
   const [{ claims }, ready] = await Promise.all(reqs);
   if (!ctx.isCurrent()) return;
 
@@ -28,7 +28,7 @@ export async function render(el, ctx) {
   };
 
   const sub = {
-    MANAGEMENT: 'Check bills and attendance against the approved budget, then pay out or send back.',
+    ADMINISTRATION: 'Check bills and attendance against the approved budget, then pay out or send back.',
     UHC: `Your own claims, plus claims filed by ${user.house_name} LHCs (read-only).`,
     LHC: 'Claims for meetups you hosted. File one after the meetup with bills and attendance.',
   }[user.role];
@@ -109,7 +109,7 @@ async function openClaim(id, ctx) {
     <div class="field"><span class="field-label">Post</span><a class="link" href="${claim.post_link}" target="_blank" rel="noopener" style="font-weight:400;word-break:break-all">${claim.post_link}</a></div>
     <div class="field"><span class="field-label">Pay to · ${{ SELF: 'the host', OTHER: 'another student', COHOST: `co-host (${claim.payee_house_name})` }[claim.payout_mode]}</span>
       ${claim.bank_hidden
-        ? html`<p class="muted">${claim.payout_mode === 'COHOST' ? claim.payee_user_name : 'Payee'} · bank details are visible to Management only.</p>`
+        ? html`<p class="muted">${claim.payout_mode === 'COHOST' ? claim.payee_user_name : 'Payee'} · bank details are visible to Administration only.</p>`
         : claim.account_number
           ? html`<dl class="kv"><dt>Name</dt><dd>${claim.payee_name}</dd><dt>Bank</dt><dd>${claim.bank_name}</dd><dt>Account</dt><dd>${claim.account_number}</dd>
               <dt>IFSC</dt><dd>${claim.ifsc}</dd>${claim.upi_id ? html`<dt>UPI</dt><dd>${claim.upi_id}</dd>` : ''}</dl>`

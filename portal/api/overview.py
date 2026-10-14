@@ -31,7 +31,7 @@ def meta():
 @login_required()
 def home():
     user = current_user()
-    builder = {'MANAGEMENT': _home_management, 'UHC': _home_uhc, 'LHC': _home_lhc}[user['role']]
+    builder = {'ADMINISTRATION': _home_administration, 'UHC': _home_uhc, 'LHC': _home_lhc}[user['role']]
     return jsonify(builder(user))
 
 
@@ -39,7 +39,7 @@ def _soon():
     return (date.today() + timedelta(days=14)).isoformat()
 
 
-def _home_management(user):
+def _home_administration(user):
     db = get_db()
     today = today_iso()
     queue = list_meetups(user, "m.status = 'PENDING'", order='m.submitted_at ASC')
@@ -294,7 +294,7 @@ def badges():
     db = get_db()
     out = {'notifications': db.execute('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0',
                                        (user['id'],)).fetchone()[0]}
-    if user['role'] == 'MANAGEMENT':
+    if user['role'] == 'ADMINISTRATION':
         out['meetups'] = db.execute("SELECT COUNT(*) FROM meetups WHERE status = 'PENDING'").fetchone()[0]
         out['claims'] = db.execute("SELECT COUNT(*) FROM claims WHERE status = 'PENDING_REVIEW'").fetchone()[0]
     else:
@@ -310,7 +310,7 @@ def badges():
 # ── Admin ───────────────────────────────────────────────────────────────────
 
 @bp.post('/admin/reset')
-@login_required('MANAGEMENT')
+@login_required('ADMINISTRATION')
 def reset():
     if (request.get_json(silent=True) or {}).get('confirm') != 'RESET':
         abort(400, 'Confirmation missing.')
