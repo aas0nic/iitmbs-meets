@@ -15,7 +15,7 @@ DB_PATH = os.path.join(DATA_DIR, 'iitmbs_meets.db')
 UPLOAD_DIR = os.path.join(DATA_DIR, 'uploads')
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), 'schema.sql')
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
 
 
 def connect():
@@ -61,20 +61,22 @@ def reset_database():
         if os.path.isfile(path):
             os.remove(path)
 
-    # Cleanly remove existing database file to prevent foreign key drop order issues
-    if os.path.exists(DB_PATH):
-        try:
-            os.remove(DB_PATH)
-        except OSError:
-            pass
-
-    conn = connect()
+    # Build the fresh database in a temporary file, then swap it in atomically. Deleting the live file
+    # instead caused "disk I/O error" when the dev server reloaded while a reset was running, and readers
+    # could see a half-built database.
+    tmp = f'{DB_PATH}.{os.getpid()}.tmp'
+    if os.path.exists(tmp):
+        os.remove(tmp)
+    conn = sqlite3.connect(tmp)
+    conn.row_factory = sqlite3.Row
     with open(SCHEMA_PATH, encoding='utf-8') as f:
         conn.executescript(f.read())
+    conn.execute('PRAGMA foreign_keys = ON')
     seed(conn)
     conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     conn.commit()
     conn.close()
+    os.replace(tmp, DB_PATH)
 
 
 def ensure_database():

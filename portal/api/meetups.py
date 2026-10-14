@@ -23,7 +23,7 @@ from .common import (BUDGET_PER_HEAD, CATEGORIES, PROPOSER_ROLES, INVITES_OPEN, 
 bp = Blueprint('meetups', __name__, url_prefix='/api')
 
 LIST_SELECT = '''
-    SELECT m.id, m.title, m.category, m.event_date, m.backup_date, m.start_time, m.end_time, m.venue,
+    SELECT m.id, m.title, m.category, m.event_date, m.backup_date, m.start_time, m.end_time, m.city, m.venue, m.map_link,
            m.expected_attendees, m.budget_requested, m.status, m.submitted_at, m.reviewed_at, m.created_at,
            m.proposer_id, p.name AS proposer_name,
            m.house_id, h.name AS house_name, h.slug AS house_slug, h.color AS house_color,
@@ -107,7 +107,11 @@ def parse_payload(data, for_submit, user):
     if end <= start:
         abort(400, 'End time must be after the start time.')
 
-    venue = clean_text(data.get('venue'), 'Venue', 4, 300)
+    city = clean_text(data.get('city'), 'City', 2, 80)
+    venue = clean_text(data.get('venue'), 'Location name', 3, 300)
+    map_link = clean_text(data.get('map_link'), 'Map link', 10, 500)
+    if not map_link.startswith(('https://', 'http://')):
+        abort(400, 'Map link must be a full link starting with https:// (e.g. from Google Maps → Share).')
     attendees = clean_int(data.get('expected_attendees'), 'Expected attendance', 1, 2000)
     extra = clean_int(data.get('extra_budget') or 0, 'Extra budget', 0, 500000)
     extra_note = clean_text(data.get('extra_budget_note'), 'Reason for extra budget', 5, 1000, required=extra > 0)
@@ -130,7 +134,9 @@ def parse_payload(data, for_submit, user):
         'backup_date': backup_date,
         'start_time': start,
         'end_time': end,
+        'city': city,
         'venue': venue,
+        'map_link': map_link,
         'expected_attendees': attendees,
         'budget_per_head': BUDGET_PER_HEAD,
         'extra_budget': extra,
@@ -255,8 +261,8 @@ def index():
         params.append(today_iso())
     q = (request.args.get('q') or '').strip()
     if q:
-        where.append('(m.title LIKE ? OR m.venue LIKE ? OR p.name LIKE ?)')
-        params += [f'%{q}%'] * 3
+        where.append('(m.title LIKE ? OR m.venue LIKE ? OR m.city LIKE ? OR p.name LIKE ?)')
+        params += [f'%{q}%'] * 4
 
     sort = request.args.get('sort')
     order = {

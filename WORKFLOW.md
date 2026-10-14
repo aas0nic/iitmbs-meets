@@ -332,7 +332,7 @@ Identity comes from a signed session cookie — **no endpoint accepts a user id 
 * `GET /api/meetups` — filters: `status` (comma list), `house_id`, `region_id`, `category`, `mine=1`, `invited=1`, `when=upcoming|past`, `q`, `sort=date_asc|submitted`. Results are limited to what the user may see.
 * `GET /api/meetups/<id>` → `{meetup, invitations, my_invitation, activity, claim, can}`.
 * `GET /api/peers` (LHC/UHC) → people the caller may invite: same-region LHCs for an LHC, other UHC members for a UHC member.
-* `POST /api/meetups` (LHC) and `PUT /api/meetups/<id>` (host, DRAFT/REJECTED): `{title, description, category, event_date, backup_date, start_time, end_time, region_id (UHC only), venue, expected_attendees, extra_budget?, extra_budget_note, collab_type, collab_name, collab_about, collab_agenda, collab_contact, collab_sponsored (yes|no), collab_sponsorship, invitee_ids[], submit}` — budget is computed as ₹200 × attendees + extra.`.
+* `POST /api/meetups` (LHC) and `PUT /api/meetups/<id>` (host, DRAFT/REJECTED): `{title, description, category, event_date, backup_date, start_time, end_time, region_id (UHC only), city, venue (location name), map_link, expected_attendees, extra_budget?, extra_budget_note, collab_type, collab_name, collab_about, collab_agenda, collab_contact, collab_sponsored (yes|no), collab_sponsorship, invitee_ids[], submit}` — budget is computed as ₹200 × attendees + extra.`.
 * `DELETE /api/meetups/<id>` (host, DRAFT).
 * `POST /api/meetups/<id>/submit | send-to-administration | withdraw` (host).
 * `POST /api/meetups/<id>/review {decision: APPROVE|REJECT, comments, date_choice: PRIMARY|BACKUP}` (Administration; comments required to reject; BACKUP approves the backup date).
@@ -357,8 +357,8 @@ Identity comes from a signed session cookie — **no endpoint accepts a user id 
 ### People & access (Administration)
 * `GET /api/admin/people?role=&q=&house_id=&region_id=&active=` → `{people, counts}`.
 * `POST /api/admin/people` `{role, name, email, roll_number, house_id, region_id, title, is_active}` · `PUT /api/admin/people/<id>` (same fields, role fixed).
-* `GET /api/admin/people/export.csv` — columns `ID, Role, Name, Email, Roll number, House, Region, Position, Access`.
-* `POST /api/admin/people/import` (multipart `file`, .csv/.xlsx) → `{rows: [{line, action: create|update|unchanged|error, changes|error, record, id}], summary}` — nothing written.
+* `GET /api/admin/people/export.csv?role=&house_id=&region_id=&q=&active=` — per-role columns (LHC: `ID, Name, Email, Roll number, House, Region, Access`; UHC: `ID, House, Position, Name, Email, Roll number, Access`; Administration: `ID, Name, Email, Title, Access`); no role = all columns incl. `Role`.
+* `POST /api/admin/people/import` (multipart `file` .csv/.xlsx + `role` scope; UHC rows match their house + position seat) → `{rows: [{line, action: create|update|unchanged|error, changes|error, record, id}], summary}` — nothing written.
 * `POST /api/admin/people/import/apply {rows}` — re-validates and applies all-or-nothing.
 
 ### Notifications & admin

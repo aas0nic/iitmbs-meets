@@ -36,7 +36,7 @@ try {
   const missing = await ev(`return document.querySelectorAll('#proposeForm .has-error').length`);
   ok(missing >= 7, 'empty proposal is blocked with inline errors', `${missing} fields`);
   await fill('#proposeForm', { title: 'E2E study jam', category: 'STUDY_JAM', description: 'A study jam created by the end-to-end test.',
-    event_date: '2026-12-12', backup_date: '2026-12-19', start_time: '10:00', end_time: '13:00', venue: 'Test hall, Mumbai', expected_attendees: '20' });
+    event_date: '2026-12-12', backup_date: '2026-12-19', start_time: '10:00', end_time: '13:00', city: 'Mumbai', venue: 'Test hall', map_link: 'https://maps.app.goo.gl/test1', expected_attendees: '20' });
   await click('[data-extra-toggle]');
   await fill('#proposeForm', { extra_budget: '3000', extra_budget_note: 'Hall booking for the day' });
   ok((await ev(`return document.querySelector('[data-total]').innerText`)).startsWith('₹7,000'), 'budget total = 20 × ₹200 + ₹3,000');
@@ -97,7 +97,7 @@ try {
   // ── UHC proposes in another region with an external collaboration ──
   await page.login('uhc-11-1', { route: '/new' });
   await fill('#proposeForm', { title: 'E2E inter-house meet', category: 'NETWORKING', description: 'Inter-house meet created by the end-to-end test.',
-    event_date: '2026-12-05', backup_date: '2026-12-06', start_time: '17:00', end_time: '20:00', region_id: '3', venue: 'Hall, Bengaluru', expected_attendees: '40' });
+    event_date: '2026-12-05', backup_date: '2026-12-06', start_time: '17:00', end_time: '20:00', region_id: '3', city: 'Bengaluru', venue: 'Community hall', map_link: 'https://maps.app.goo.gl/test2', expected_attendees: '40' });
   await ev(`document.querySelector('[name=collab_type][value=EXTERNAL]').click()`); await sleep(100);
   await fill('#proposeForm', { collab_name: 'Test Org', collab_about: 'A community that runs quizzes.', collab_agenda: 'They host the quiz round.', collab_contact: 'Arjun, organiser' });
   await ev(`document.querySelector('[name=collab_sponsored][value=no]').click()`);
@@ -124,14 +124,26 @@ try {
   await fill('#dialog form', { name: 'Neha Iyer', roll_number: '24f1009999' });
   await click('#dialog [data-submit]'); await sleep(1000);
   const seat = await ev(`return (await (await fetch('/api/admin/people?role=UHC&house_id=11')).json()).people.find(p => p.id === 'uhc-11-1')`);
-  ok(seat.name === 'Neha Iyer' && seat.email === 'sundarbans.secretary@study.iitm.ac.in', 'UHC seat handed over, seat email kept');
+  ok(seat.name === 'Neha Iyer' && seat.email === 'sundarbans-sec@ds.study.iitm.ac.in', 'UHC seat handed over, seat email kept');
+  ok(await ev(`return document.querySelector('[data-add]').hidden`), 'no Add on the UHC tab (36 fixed seats)');
   await click('[data-import]'); await sleep(300);
+  await attachFile('[data-people-file]', 'uhc.csv', 'House,Position,Name,Roll number\nGir,Secretary,New Gir Secretary,25f1000001\n', 'text/csv'); await sleep(900);
+  ok((await ev(`return document.querySelector('#dialog .import-row')?.innerText || ''`)).includes('New Gir Secretary'), 'UHC import matches the seat (hand-over preview)');
+  await ev(`document.querySelector('#dialog [data-close]').click()`); await sleep(200);
+  await ev(`[...document.querySelectorAll('[data-tab]')].find(b => b.dataset.tab === 'LHC').click()`); await sleep(800);
+  ok((await ev(`return document.querySelector('[data-add-label]').innerText`)) === 'Add LHC', 'Add button follows the tab (LHC)');
+  await click('[data-view=cards]'); await sleep(600);
+  ok(await ev(`return document.querySelectorAll('.pcard').length === 120`), 'card view shows LHC cards');
+  await click('[data-view=list]'); await sleep(600);
+  await click('[data-import]'); await sleep(300);
+  ok(await ev(`return !!document.querySelector('#dialog a[download="lhc-template.csv"]')`), 'LHC import offers its own template');
   await attachFile('[data-people-file]', 'people.csv',
     'Role,Name,Email,Roll number,House,Region,Position,Access\nLHC,E2E Student,24f3999001@ds.study.iitm.ac.in,24f3999001,Gir,Chennai,,On\nLHC,Bad Region,24f3999002@ds.study.iitm.ac.in,24f3999002,Gir,Pune,,On\n', 'text/csv');
   await sleep(900);
   ok((await ev(`return document.querySelector('.import-summary').innerText`)).includes('1 new'), 'import preview shows 1 new + 1 error');
   await click('#dialog [data-submit]'); await sleep(1000);
   ok((await toasts()).includes('1 added'), 'import applied');
+  ok((await ev(`return (await fetch('/api/admin/people/export.csv?role=UHC&house_id=3')).text()`)).replace(/^\ufeff/, '').startsWith('ID,House,Position'), 'UHC export uses seat columns');
   await ev(`await fetch('/api/admin/people/lhc-8-5', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({is_active: 0})})`);
   ok(await ev(`return (await fetch('/api/session', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user_id:'lhc-8-5'})})).status === 403`), 'access off blocks sign-in');
 

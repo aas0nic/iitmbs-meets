@@ -8,6 +8,7 @@ Meetup dates are generated relative to today so the demo always has
 upcoming, in-flight and past events.
 """
 import random
+from urllib.parse import quote
 from datetime import date, datetime, time, timedelta, timezone
 
 HOUSES = [
@@ -53,6 +54,7 @@ LAST = [
 ]
 
 UHC_TITLES = ['Secretary', 'Deputy Secretary', 'Web Admin']
+UHC_EMAIL_CODES = {'Secretary': 'sec', 'Deputy Secretary': 'ds', 'Web Admin': 'webad'}  # <house>-<code>@ds.study.iitm.ac.in
 
 # Fixed names for the accounts the walkthrough in WORKFLOW.md refers to.
 NAMED = {
@@ -63,6 +65,10 @@ NAMED = {
     'lhc-8-5': 'Vikrant Joshi',
     'uhc-11-1': 'Vikram Rao',
 }
+
+REGION_CITY = {1: 'New Delhi', 2: 'Chennai', 3: 'Bengaluru', 4: 'Hyderabad', 5: 'Mumbai', 6: 'Kolkata',
+               7: 'Patna', 8: 'Chandigarh', 9: 'Lucknow', 10: 'Dubai'}
+KNOWN_CITIES = set(REGION_CITY.values())
 
 DEMO_ACCOUNTS = ['admin-1', 'uhc-11-1', 'lhc-11-5', 'lhc-2-5']
 
@@ -115,7 +121,7 @@ def seed(conn):
             uid = f'uhc-{h_id}-{n}'
             r = roll(rng.choice([21, 22]))
             # UHC seats have fixed position emails that pass to each newly elected member.
-            seat_email = f"{HOUSES[h_id - 1][1]}.{UHC_TITLES[n - 1].lower().replace(' ', '')}@study.iitm.ac.in"
+            seat_email = f"{HOUSES[h_id - 1][1]}-{UHC_EMAIL_CODES[UHC_TITLES[n - 1]]}@ds.study.iitm.ac.in"
             users.append((uid, NAMED.get(uid) or fresh_name(), seat_email, 'UHC',
                           UHC_TITLES[n - 1], h_id, None, r))
         for n in range(1, 11):
@@ -158,6 +164,14 @@ def seed(conn):
                claim=None, backup=None, region=None, collab=None):
         budget = BUDGET_PER_HEAD * attendees + extra
         collab = collab or {}
+        # "Location, City" in the sample text → separate location name and city, plus a Maps search link.
+        rid = region or user_region[proposer]
+        head, _, tail = venue.rpartition(', ')
+        if head and tail in KNOWN_CITIES:
+            venue, city = head, tail
+        else:
+            city = REGION_CITY[rid]
+        map_link = 'https://www.google.com/maps/search/?api=1&query=' + quote(f'{venue}, {city}')
         created = at(created_days_ago)
         submitted = None if status == 'DRAFT' else created + timedelta(minutes=12)
         reviewed_at = reviewed_by = None
@@ -167,15 +181,15 @@ def seed(conn):
         completed_at = _ts(now - timedelta(days=max(-offset - 1, 0))) if status == 'COMPLETED' else None
         c.execute(
             '''INSERT INTO meetups (title, description, category, proposer_id, house_id, region_id,
-                   event_date, backup_date, start_time, end_time, venue, expected_attendees,
+                   event_date, backup_date, start_time, end_time, city, venue, map_link, expected_attendees,
                    budget_per_head, extra_budget, extra_budget_note, budget_requested,
                    status, review_comments, reviewed_by, reviewed_at,
                    submitted_at, completed_at, created_at, updated_at,
                    collab_type, collab_name, collab_about, collab_agenda, collab_contact, collab_sponsored,
                    collab_sponsorship)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-            (title, description, category, proposer, user_house[proposer], region or user_region[proposer],
-             day(offset), day(backup) if backup is not None else None, start, end, venue, attendees,
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (title, description, category, proposer, user_house[proposer], rid,
+             day(offset), day(backup) if backup is not None else None, start, end, city, venue, map_link, attendees,
              BUDGET_PER_HEAD, extra, extra_note, budget, status,
              review[1] if review else None, reviewed_by, _ts(reviewed_at) if reviewed_at else None,
              _ts(submitted) if submitted else None, completed_at, _ts(created), _ts(reviewed_at or created),

@@ -28,7 +28,7 @@ function page(d, ctx) {
       <div class="detail-meta">
         <span>${icon('calendar')}${fmtLongDate(m.event_date)}${m.backup_date && ['PEER_REVIEW', 'PENDING', 'DRAFT', 'REJECTED'].includes(m.status) ? html`<span class="faint">or ${fmtDate(m.backup_date)}</span>` : ''}${when >= 0 && when < 7 && !['COMPLETED', 'CANCELLED'].includes(m.status) ? html`<span class="faint">(${relDay(m.event_date).toLowerCase()})</span>` : ''}</span>
         <span>${icon('clock')}${fmtTimeRange(m.start_time, m.end_time)}</span>
-        <span>${icon('pin')}${m.venue}</span>
+        <span>${icon('pin')}${m.venue}, ${m.city}</span>
       </div>
       ${steps(m, d.invitations)}
     </header>
@@ -68,9 +68,9 @@ function facts(m, d) {
   return html`<section class="card">
     <header class="card-head"><h2 class="card-title">Logistics</h2></header>
     <div class="facts">
-      <div class="fact wide"><div class="fact-label">Venue</div><div class="fact-value">${m.venue}
-        <a class="link small" style="margin-left:6px;font-weight:400" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.venue)}" target="_blank" rel="noopener">Open in Maps</a></div></div>
-      <div class="fact"><div class="fact-label">Region</div><div class="fact-value">${m.region_name}</div></div>
+      <div class="fact wide"><div class="fact-label">Location</div><div class="fact-value">${m.venue}, ${m.city}
+        <a class="link small" style="margin-left:6px;font-weight:400" href="${m.map_link}" target="_blank" rel="noopener">Open in Maps ${icon('arrow-right', 'i-sm')}</a></div></div>
+      <div class="fact"><div class="fact-label">City</div><div class="fact-value">${m.city}${m.region_name !== m.city ? html` <span class="faint">· ${m.region_name} region</span>` : ''}</div></div>
       <div class="fact"><div class="fact-label">Expected attendance</div><div class="fact-value">${m.expected_attendees}</div></div>
       ${m.backup_date ? html`<div class="fact wide"><div class="fact-label">${decided ? 'Alternate date (not chosen)' : 'Backup date'}</div><div class="fact-value">${fmtLongDate(m.backup_date)}</div></div>` : ''}
       <div class="fact wide"><div class="fact-label">Budget</div><div class="fact-value">

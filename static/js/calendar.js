@@ -122,7 +122,7 @@ export function mountCalendar(el, { scopes = [['all', 'All']] } = {}) {
     <span class="cal-item-time">${fmtTime(m.start_time)}<small>${m.event_date !== st.selected ? parse(m.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : fmtTime(m.end_time)}</small></span>
     <span style="min-width:0">
       <span class="cal-item-title" style="display:block">${m.title}</span>
-      <span class="cal-item-sub">${crest(m.house_slug)}<span>${m.venue || m.region_name}</span></span>
+      <span class="cal-item-sub">${crest(m.house_slug)}<span>${m.venue}, ${m.city}</span></span>
       ${status(m.status)}
     </span>
   </a>`;

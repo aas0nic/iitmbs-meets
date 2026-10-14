@@ -2,7 +2,8 @@
 
 - LHCs sign in with their own student email; Administration can correct email, roll number, house
   and region.
-- UHC seats have fixed position emails (e.g. sundarbans.secretary@…) that pass to each newly elected
+- UHC is 36 fixed seats (12 houses × Secretary / Deputy Secretary / Web Admin): they can't be added and
+  their house/position can't change. UHC seats have fixed position emails (<house>-sec / -ds / -webad @ds.study.iitm.ac.in) that pass to each newly elected
   member: hand a seat over by changing the holder's name and roll number — the email stays.
 - Access can be turned off without deleting anyone (their meetups and claims stay intact).
 - Bulk changes come from a CSV/Excel file: preview first, then apply. Rows match an existing person by
@@ -25,6 +26,8 @@ bp = Blueprint('people', __name__, url_prefix='/api/admin/people')
 ROLES = {'LHC': 'LHC', 'UHC': 'UHC', 'ADMINISTRATION': 'ADMINISTRATION', 'ADMIN': 'ADMINISTRATION',
          'MANAGEMENT': 'ADMINISTRATION'}  # accept the old label in older spreadsheets
 ROLL_RE = re.compile(r'^\d{2}[a-z]{1,2}\d{5,8}$')
+UHC_POSITIONS = ('Secretary', 'Deputy Secretary', 'Web Admin')  # three seats per house
+UHC_EMAIL_CODES = {'Secretary': 'sec', 'Deputy Secretary': 'ds', 'Web Admin': 'webad'}
 FIELDS = ('name', 'email', 'roll_number', 'house_id', 'region_id', 'title', 'is_active')
 
 SELECT = '''
@@ -41,8 +44,9 @@ class RowError(ValueError):
 
 def _lookups():
     db = get_db()
-    houses = {}
+    houses = {'__slug__': {}}
     for h in db.execute('SELECT id, slug, name FROM houses'):
+        houses['__slug__'][h['id']] = h['slug']
         houses[h['slug'].lower()] = h['id']
         houses[h['name'].lower()] = h['id']
         houses[str(h['id'])] = h['id']
@@ -55,6 +59,17 @@ def _lookups():
     return houses, regions
 
 
+def canonical_position(raw):
+    """'deputy secretary' / 'DeputySecretary' → 'Deputy Secretary'; None if not a UHC position."""
+    key = re.sub(r'[^a-z]', '', str(raw or '').lower())
+    return next((p for p in UHC_POSITIONS if re.sub(r'[^a-z]', '', p.lower()) == key), None)
+
+
+def seat_email(house_slug, position):
+    """Official UHC seat address, e.g. sundarbans-sec@ds.study.iitm.ac.in."""
+    return f'{house_slug}-{UHC_EMAIL_CODES[position]}@ds.study.iitm.ac.in'
+
+
 def normalise(data, existing=None, lookups=None):
     """Validate one person (create when existing is None) → dict of FIELDS (+ role). Raises RowError."""
     houses, regions = lookups or _lookups()
@@ -65,12 +80,41 @@ def normalise(data, existing=None, lookups=None):
         raise RowError("Role can't be changed — add a new person instead.")
 
     def pick(key):
-        return data[key] if key in data and data[key] not in (None,) else (existing or {}).get(key)
+        return data[key] if key in data and data[key] is not None else (existing or {}).get(key)
 
     name = str(pick('name') or '').strip()
     if not 2 <= len(name) <= 120:
         raise RowError('Name is required.')
+
+    # House / region / position first: a UHC seat's email can be derived from them.
+    house_raw = data['house'] if 'house' in data else pick('house_id')
+    house_id = houses.get(str(house_raw).strip().lower()) if house_raw not in (None, '') else None
+    region_raw = data['region'] if 'region' in data else pick('region_id')
+    region_id = regions.get(str(region_raw).strip().lower()) if region_raw not in (None, '') else None
+    if role in ('LHC', 'UHC') and not house_id:
+        raise RowError(f'House "{house_raw or ""}" not recognised.')
+    if role == 'LHC' and not region_id:
+        raise RowError(f'Region "{region_raw or ""}" not recognised.')
+    if role != 'LHC':
+        region_id = None
+    if role == 'ADMINISTRATION':
+        house_id = None
+
+    title = str(pick('title') or '').strip() or None
+    if role == 'UHC':
+        title = canonical_position(title)
+        if not title:
+            raise RowError(f'Position must be one of: {", ".join(UHC_POSITIONS)}.')
+        if not existing:
+            raise RowError('UHC has 36 fixed seats — hand an existing seat over instead of adding one.')
+        if house_id != existing['house_id'] or title != existing['title']:
+            raise RowError("UHC seats are fixed — a seat's house and position can't change.")
+    elif role == 'LHC':
+        title = None
+
     email = str(pick('email') or '').strip().lower()
+    if not email and role == 'UHC':
+        email = seat_email(houses['__slug__'][house_id], title)
     if not EMAIL_RE.match(email) or not email.endswith('iitm.ac.in'):
         raise RowError(f'Email "{email}" must be an IIT Madras address (…iitm.ac.in).')
     roll = str(pick('roll_number') or '').strip().lower() or None
@@ -78,26 +122,6 @@ def normalise(data, existing=None, lookups=None):
         raise RowError('Roll number is required.')
     if roll and not ROLL_RE.match(roll):
         raise RowError(f'Roll number "{roll}" should look like 23f1000123.')
-
-    house_raw = pick('house_id') if 'house_id' in data or existing else data.get('house')
-    house_raw = data.get('house', house_raw) if 'house' in data else house_raw
-    house_id = houses.get(str(house_raw).strip().lower()) if house_raw not in (None, '') else None
-    region_raw = data.get('region') if 'region' in data else pick('region_id')
-    region_id = regions.get(str(region_raw).strip().lower()) if region_raw not in (None, '') else None
-    if role in ('LHC', 'UHC') and not house_id:
-        raise RowError(f'House "{house_raw or ""}" not recognised.')
-    if role == 'LHC' and not region_id:
-        raise RowError(f'Region "{region_raw or ""}" not recognised.')
-    if role == 'UHC':
-        region_id = None
-    if role == 'ADMINISTRATION':
-        house_id = region_id = None
-
-    title = str(pick('title') or '').strip() or None
-    if role == 'UHC' and not title:
-        raise RowError('UHC position is required (e.g. Secretary).')
-    if role == 'LHC':
-        title = None
 
     active_raw = pick('is_active')
     if isinstance(active_raw, str):
@@ -110,6 +134,12 @@ def normalise(data, existing=None, lookups=None):
 
 def _check_unique(rec, self_id=None):
     db = get_db()
+    if rec['role'] == 'UHC':
+        clash = db.execute("SELECT u.name, h.name FROM users u JOIN houses h ON h.id = u.house_id "
+                           "WHERE u.role = 'UHC' AND u.house_id = ? AND u.title = ? AND u.id IS NOT ?",
+                           (rec['house_id'], rec['title'], self_id)).fetchone()
+        if clash:
+            raise RowError(f'{clash[1]} {rec["title"]} is already held by {clash[0]} — hand that seat over instead.')
     clash = db.execute('SELECT name FROM users WHERE email = ? AND id IS NOT ?', (rec['email'], self_id)).fetchone()
     if clash:
         raise RowError(f'{rec["email"]} is already used by {clash[0]}.')
@@ -216,22 +246,56 @@ ALIASES = {
 }
 
 
+COLUMNS = {
+    'LHC': ['ID', 'Name', 'Email', 'Roll number', 'House', 'Region', 'Access'],
+    'UHC': ['ID', 'House', 'Position', 'Name', 'Email', 'Roll number', 'Access'],
+    'ADMINISTRATION': ['ID', 'Name', 'Email', 'Title', 'Access'],
+}
+ROLE_LABEL = {'LHC': 'LHC', 'UHC': 'UHC', 'ADMINISTRATION': 'Administration'}
+
+
+def _cells(p, cols):
+    value = {'ID': p['id'], 'Role': ROLE_LABEL[p['role']], 'Name': p['name'], 'Email': p['email'],
+             'Roll number': p['roll_number'] or '', 'House': p['house_name'] or '', 'Region': p['region_name'] or '',
+             'Position': p['title'] or '', 'Title': p['title'] or '', 'Access': 'On' if p['is_active'] else 'Off'}
+    return [value[c] for c in cols]
+
+
 @bp.get('/export.csv')
 @login_required('ADMINISTRATION')
 def export():
+    """CSV export. ?role=LHC|UHC|ADMINISTRATION (role-specific columns) or all; optional house_id, region_id, q, active."""
+    role = request.args.get('role') if request.args.get('role') in COLUMNS else None
+    where, params = ['1=1'], []
+    if role:
+        where.append('u.role = ?')
+        params.append(role)
+    for key in ('house_id', 'region_id'):
+        if request.args.get(key):
+            where.append(f'u.{key} = ?')
+            params.append(request.args[key])
+    if request.args.get('active') in ('0', '1'):
+        where.append('u.is_active = ?')
+        params.append(int(request.args['active']))
+    q = (request.args.get('q') or '').strip()
+    if q:
+        where.append('(u.name LIKE ? OR u.email LIKE ? OR u.roll_number LIKE ?)')
+        params += [f'%{q}%'] * 3
+    cols = COLUMNS[role] if role else HEADER
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(HEADER)
-    label = {'LHC': 'LHC', 'UHC': 'UHC', 'ADMINISTRATION': 'Administration'}
-    for p in get_db().execute(SELECT + " ORDER BY CASE u.role WHEN 'ADMINISTRATION' THEN 0 WHEN 'UHC' THEN 1 ELSE 2 END, h.name, r.id, u.name"):
-        w.writerow([p['id'], label[p['role']], p['name'], p['email'], p['roll_number'] or '', p['house_name'] or '',
-                    p['region_name'] or '', p['title'] or '', 'On' if p['is_active'] else 'Off'])
-    return Response('﻿' + out.getvalue(), mimetype='text/csv',
-                    headers={'Content-Disposition': 'attachment; filename="meetup-planner-people.csv"'})
+    w.writerow(cols)
+    order = " ORDER BY CASE u.role WHEN 'ADMINISTRATION' THEN 0 WHEN 'UHC' THEN 1 ELSE 2 END, h.name, r.id, u.title, u.name"
+    for p in get_db().execute(f"{SELECT} WHERE {' AND '.join(where)}{order}", params):
+        w.writerow(_cells(p, cols))
+    name = {'LHC': 'lhcs', 'UHC': 'uhc-seats', 'ADMINISTRATION': 'administration'}.get(role, 'people')
+    return Response('\ufeff' + out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': f'attachment; filename="meetup-planner-{name}.csv"'})
 
 
-def _plan(records):
-    """records: list of (line, dict). → list of preview rows with action/changes/error and the record to apply."""
+def _plan(records, scope=None):
+    """records: list of (line, dict) → preview rows with action/changes/error and the record to apply.
+    scope: the role this import is for (rows default to it; other roles are errors)."""
     db = get_db()
     lookups = _lookups()
     by_id = {r['id']: dict(r) for r in db.execute('SELECT * FROM users')}
@@ -242,7 +306,20 @@ def _plan(records):
     for line, data in records:
         row = {'line': line, 'name': data.get('name') or '', 'email': (data.get('email') or '').lower()}
         try:
+            if scope:
+                row_role = ROLES.get(str(data.get('role') or '').strip().upper())
+                if data.get('role') and row_role != scope:
+                    raise RowError(f'This import is for {ROLE_LABEL[scope]} — row says {data["role"]}.')
+                data = {**data, 'role': scope}
             existing = by_id.get(str(data.get('id') or '').strip()) or by_email.get(row['email'])
+            if not existing and data.get('role') and ROLES.get(str(data['role']).upper()) == 'UHC':
+                # A UHC row matches its seat (house + position): that's a hand-over to a new holder.
+                hid = lookups[0].get(str(data.get('house') or '').strip().lower())
+                pos = canonical_position(data.get('title'))
+                existing = next((u for u in by_id.values() if u['role'] == 'UHC' and u['house_id'] == hid
+                                 and u['title'] == pos), None) if hid and pos else None
+                if not existing:
+                    raise RowError(f'No UHC seat "{data.get("house", "")} · {data.get("title", "")}" — use one of the 36 seats.')
             if data.get('id') and not by_id.get(str(data['id']).strip()):
                 raise RowError(f'ID "{data["id"]}" not found. Leave ID empty to add a new person.')
             rec = normalise(data, existing, lookups)
@@ -292,15 +369,18 @@ def preview():
         abort(400, str(e))
     if len(table) < 2:
         abort(400, 'The file needs a header row and at least one person.')
+    scope = request.form.get('role') if request.form.get('role') in COLUMNS else None
     header = [ALIASES.get(h.strip().lower()) for h in table[0]]
-    if 'email' not in header or 'name' not in header:
-        abort(400, 'The header row needs at least "Name" and "Email" columns. Download the template for the full layout.')
+    needs = ('name', 'house', 'title') if scope == 'UHC' else ('name', 'email')
+    if any(n not in header for n in needs):
+        cols = {'name': 'Name', 'email': 'Email', 'house': 'House', 'title': 'Position'}
+        abort(400, f'The header row needs {", ".join(cols[n] for n in needs)} columns. Download the template for the layout.')
     records = []
     for i, r in enumerate(table[1:], start=2):
         data = {key: (r[j] if j < len(r) else '') for j, key in enumerate(header) if key}
         data = {k: v for k, v in data.items() if v != ''}
         records.append((i, data))
-    plan = _plan(records)
+    plan = _plan(records, scope)
     summary = {a: sum(1 for p in plan if p['action'] == a) for a in ('create', 'update', 'unchanged', 'error')}
     return jsonify(rows=plan, summary=summary)
 

@@ -5,6 +5,9 @@
 import { api } from '../api.js';
 import { $, $$, busy, clearFieldError, crest, html, icon, showFieldErrors, status, toast } from '../ui.js';
 
+const CITY_HINTS = ['New Delhi', 'Noida', 'Gurugram', 'Chennai', 'Bengaluru', 'Kochi', 'Hyderabad', 'Visakhapatnam', 'Mumbai',
+  'Pune', 'Ahmedabad', 'Kolkata', 'Bhubaneswar', 'Patna', 'Ranchi', 'Chandigarh', 'Lucknow', 'Bhopal', 'Dubai'];
+
 const COLLAB = [
   ['NONE', 'x', 'No collaboration', 'Just your council'],
   ['SOCIETY', 'users', 'IITM society', 'With a BS society'],
@@ -81,9 +84,18 @@ export async function render(el, ctx) {
               <option value="" disabled ${m.region_id ? '' : 'selected'}>Choose where it will be held</option>
               ${ctx.meta.regions.map((r) => html`<option value="${r.id}" ${r.id === m.region_id ? 'selected' : ''}>${r.name}</option>`)}
             </select></label>` : ''}
-          <label class="field" data-field="venue"><span class="field-label">Venue</span>
-            <input class="input" name="venue" maxlength="300" value="${m.venue || ''}" placeholder="Venue name and full address">
-            <span class="field-hint">Include the area and city so people can plan travel.</span></label>
+          <label class="field" data-field="city"><span class="field-label">City</span>
+            <input class="input" name="city" maxlength="80" value="${m.city || ''}" placeholder="e.g. Mumbai" list="cityHints" autocomplete="off">
+            <datalist id="cityHints">${CITY_HINTS.map((c) => html`<option value="${c}">`)}</datalist></label>
+          <div class="field-group">
+            <span class="field-label">Location</span>
+            <label class="field" data-field="venue"><span class="field-label sub">Name</span>
+              <input class="input" name="venue" maxlength="300" value="${m.venue || ''}" placeholder="e.g. 91springboard, Bandra Kurla Complex"></label>
+            <label class="field" data-field="map_link"><span class="field-label sub">Map link</span>
+              <input class="input" name="map_link" type="url" maxlength="500" value="${m.map_link || ''}" placeholder="https://maps.app.goo.gl/…">
+              <span class="field-hint">In Google Maps, open the place → Share → Copy link.
+                <a class="link" href="#" data-find-map>Find it on Google Maps ${icon('arrow-right', 'i-sm')}</a></span></label>
+          </div>
         </div>
       </section>
 
@@ -233,6 +245,11 @@ export async function render(el, ctx) {
     if (['extra_budget', 'expected_attendees'].includes(e.target.name)) syncBudget();
     clearError(e.target.name);
   });
+  $('[data-find-map]', form).addEventListener('click', (e) => {
+    e.preventDefault();
+    const q = [form.venue.value.trim(), form.city.value.trim()].filter(Boolean).join(', ');
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q || 'IIT Madras')}`, '_blank', 'noopener');
+  });
   syncPeers(); syncBudget(); syncCollab();
 
   const clearError = (name) => clearFieldError(form, name);
@@ -286,7 +303,9 @@ function validate(f, { submit, minDate, isUhc, extraOpen }) {
   need(!v('end_time'), 'end_time', 'Set an end time.');
   need(v('start_time') && v('end_time') && v('end_time') <= v('start_time'), 'end_time', 'Must be after the start time.');
   if (isUhc) need(!v('region_id'), 'region_id', 'Choose a region.');
-  need(v('venue').length < 4, 'venue', 'Add the venue name and address.');
+  need(v('city').length < 2, 'city', 'Add the city.');
+  need(v('venue').length < 3, 'venue', 'Add the location name.');
+  need(!/^https?:\/\/\S+\.\S+/.test(v('map_link')), 'map_link', 'Paste the map link (starting with https://).');
   const att = v('expected_attendees').replace(/[,\s]/g, '');
   need(!/^\d+$/.test(att) || Number(att) < 1, 'expected_attendees', 'Enter the number of people you expect.');
   if (extraOpen) {

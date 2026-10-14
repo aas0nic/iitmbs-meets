@@ -8,7 +8,7 @@
 > Related docs: `CLAUDE.md` (short rules for Claude, points here) · `WORKFLOW.md` (formal spec: RBAC
 > matrix, lifecycle diagrams, API contract) · `README.md` (quick start).
 >
-> Last updated: **2026-10-14** (schema version **8**)
+> Last updated: **2026-10-14** (schema version **10**)
 >
 > **Naming:** the top tier is **Administration** everywhere — UI text and code alike: role key
 > `ADMINISTRATION`, `administration_ids()`, `permissions().send_to_administration`, demo ids `admin-1`/`admin-2`.
@@ -31,7 +31,8 @@ meetups, get them approved by Administration, and get reimbursed afterwards.
     reimbursement claims; manages people and portal access.
   - **UHC** — Upper House Council (36 = 3 per house; titles Secretary / Deputy Secretary / Web Admin).
     House oversight, and can propose meetups in **any** region. Each UHC seat has a **fixed position email**
-    (`<house>.<position>@study.iitm.ac.in`, e.g. `sundarbans.secretary@…`) handed to each newly elected member.
+    (`<house>-sec`, `<house>-ds`, `<house>-webad` `@ds.study.iitm.ac.in` for Secretary / Deputy Secretary / Web Admin,
+    e.g. `sundarbans-sec@ds.study.iitm.ac.in`; `UHC_EMAIL_CODES` in `people.py` and `seed.py`) handed to each newly elected member.
   - **LHC** — Lower House Council (120 = 10 per house). LHC member *n* of each house sits in region *n*,
     so each region has exactly **one LHC per house** (12 per region). LHCs sign in with their **own student
     email**.
@@ -42,7 +43,7 @@ meetups, get them approved by Administration, and get reimbursed afterwards.
 |---|---|---|
 | Who proposes | LHC (own region only) and UHC (chooses any region). Administration cannot. | `meetups.parse_payload`, `PROPOSER_ROLES` |
 | Co-hosts | LHC host → LHCs of the **same region** (any house). UHC host → **other UHC members** (any house). Optional. | `meetups.invitable_clause` |
-| Offline only | Every meetup is in person; `venue` required. No online/hybrid mode exists. | schema, `parse_payload` |
+| Offline only | Every meetup is in person: **City** + **Location** (name = `venue`, `map_link` URL, e.g. Google Maps share link) are required. No online/hybrid mode exists. | schema, `parse_payload` |
 | Mandatory fields | Everything required except co-hosts and the collaboration block. Includes **backup date**. | `parse_payload` + `propose.js validate()` |
 | Dates | Preferred `event_date` + `backup_date` (must differ, both in the future on submit). Administration approves one; choosing BACKUP **swaps** them so `event_date` is always the calendar date. | `meetups.review` |
 | Budget | Allowance = **₹200 × expected attendees** (`BUDGET_PER_HEAD`, `portal/api/common.py`; mirrored in `portal/seed.py`). Optional `extra_budget` (e.g. venue booking) needs `extra_budget_note`. `budget_requested` = allowance + extra, computed server-side (DB CHECK enforces the sum). | `parse_payload`, schema |
@@ -55,7 +56,7 @@ meetups, get them approved by Administration, and get reimbursed afterwards.
 | Payout | SELF (claimant; saved back to their profile) · OTHER (details typed on the claim) · COHOST (accepted co-host **from another house** with saved details; claimant never sees the details; co-host must confirm → then Administration). Decline → claimant picks another payee. | `claims.resolve_payout`, `payee_response`, `change_payee` |
 | Bank detail privacy | Bank fields are returned only to Administration, the payee, and the claimant for SELF/OTHER. Everyone else (incl. UHC oversight) gets `bank_hidden: true`. | `claims.present()` |
 | Identity | The acting user **always** comes from the signed session cookie, never the request body. | `portal/auth.py` |
-| People & access | Only Administration. Edit name/email/roll/house/region/position; role can't change (add a new person instead). Emails must end in `iitm.ac.in`; email and roll number unique. `is_active = 0` turns access off (can't sign in, can't be invited, existing session is dropped); records are never deleted. Can't turn off your own access. Bulk: CSV/XLSX → preview (create/update/unchanged/error) → apply (all-or-nothing re-validation). Rows match by `ID` (from Export) then email. | `portal/api/people.py` |
+| People & access | Only Administration. Edit name/email/roll/house/region/position; role can't change (add a new person instead). Emails must end in `iitm.ac.in`; email and roll number unique. `is_active = 0` turns access off (can't sign in, can't be invited, existing session is dropped); records are never deleted. Can't turn off your own access. UHC is **36 fixed seats** (12 houses × `UHC_POSITIONS`: Secretary, Deputy Secretary, Web Admin): seats can't be added (no Add on the UHC tab; API/import reject new UHC rows) and a seat's house/position can't change — editing a seat = handing it over (holder name, roll, access). Add / Import / Export follow the current tab (role): role-specific forms, templates and CSV columns. Bulk: CSV/XLSX → preview (create/update/unchanged/error) → apply (all-or-nothing re-validation). Rows match by `ID` (from Export), then email, then — for UHC — the house + position seat (= hand-over). A blank UHC email keeps/derives the seat email. | `portal/api/people.py` |
 
 ### Meetup lifecycle
 
@@ -136,7 +137,7 @@ data/                      iitmbs_meets.db, uploads/, .secret_key — generated,
 - `users(id, name, email, role, title, house_id, region_id, roll_number, is_active, updated_at)` — CHECK:
   LHC has house+region, UHC house only, Administration neither. New people get ids `lhc-…`/`uhc-…`/`admin-…`.
 - `meetups(...)` — title, description, category, proposer/house/region, `event_date`, `backup_date`,
-  times, venue, `expected_attendees`, `budget_per_head`, `extra_budget`, `extra_budget_note`,
+  times, `city`, `venue` (location name), `map_link`, `expected_attendees`, `budget_per_head`, `extra_budget`, `extra_budget_note`,
   `budget_requested`, `collab_*`, status, review fields, timestamps.
 - `meetup_invitations(meetup_id, invitee_id, status INVITED|ACCEPTED|DECLINED, response_note)`
 - `meetup_activity(meetup_id, actor_id, action, note)` — audit trail **and** comment thread.
@@ -158,7 +159,7 @@ Meetups: `GET /meetups` (filters), `GET /meetups/:id`, `GET /peers`, `POST /meet
 `POST /meetups/:id/{submit,send-to-administration,withdraw,review,complete,cancel,comments}`, `POST /invitations/:meetupId/respond` ·
 Claims: `GET /meetups/:id/claim-setup`, `POST /attendees/parse` (multipart file), `POST /meetups/:id/claim` (multipart),
 `GET /claims`, `GET /claims/:id`, `POST /claims/:id/{payee,payee-response,review}`, `GET /claims/:id/files/:fid` ·
-Profile: `GET|PUT|DELETE /me/payout` · People (Admin): `GET /admin/people?role&q&house_id&region_id&active`, `POST /admin/people`, `PUT /admin/people/:id`, `GET /admin/people/export.csv`, `POST /admin/people/import` (multipart → preview), `POST /admin/people/import/apply {rows}` · Admin: `POST /admin/reset {confirm:"RESET"}` · Notifications: `GET /notifications`, `POST /notifications/read`.
+Profile: `GET|PUT|DELETE /me/payout` · People (Admin): `GET /admin/people?role&q&house_id&region_id&active`, `POST /admin/people`, `PUT /admin/people/:id`, `GET /admin/people/export.csv?role&house_id&region_id&q&active`, `POST /admin/people/import` (multipart `file` + `role` → preview), `POST /admin/people/import/apply {rows}` · Admin: `POST /admin/reset {confirm:"RESET"}` · Notifications: `GET /notifications`, `POST /notifications/read`.
 Full payloads: `WORKFLOW.md` §6.
 
 ## 4. Design system & UX conventions
@@ -197,7 +198,9 @@ Full payloads: `WORKFLOW.md` §6.
 6. Sign-in brand used `flex: 1` from the sidebar and stretched vertically — scope layout rules.
 7. Seed data uses obviously fake bank details (`Demo Bank`, IFSC `DEMO0…`). Keep it that way.
 8. The Flask dev server can be killed externally; if every browser check fails, check it is running.
-9. The DB is rebuilt only when `SCHEMA_VERSION` changes. If you bump the version and then keep editing
+9. `reset_database()` builds into a temp file and `os.replace`s it (atomic). Never delete the live DB file:
+   a dev-server reload rebuilding at the same time as a reset caused `disk I/O error` and killed the server.
+   The DB is rebuilt only when `SCHEMA_VERSION` changes. If you bump the version and then keep editing
    `seed.py`, the running server may already have rebuilt from the old seed — run
    `.venv/bin/python -c "from portal.db import reset_database; reset_database()"` after seed edits.
 10. The shell is zsh: an unquoted `$FILES` is *not* split into words. Use `| xargs …` (or `${=FILES}`) for
@@ -207,7 +210,7 @@ Full payloads: `WORKFLOW.md` §6.
 
 ```bash
 .venv/bin/python app.py                       # server on :5050 (rebuilds DB if schema version changed)
-node tools/e2e.mjs                            # 30-step browser regression across all roles (resets data)
+node tools/e2e.mjs                            # 35-step browser regression across all roles (resets data)
 node tools/shoot.mjs .shots "admin-1|/home|1440|admin-home" "lhc-11-5|/new|390|new-phone|dark"
 ```
 Demo accounts: `admin-1` Dr. Meera Krishnan (Administration) · `uhc-11-1` Vikram Rao (UHC Sundarbans) ·
@@ -251,3 +254,11 @@ relevant section + change log; `WORKFLOW.md` for spec-level changes; `CLAUDE.md`
   (5-tab bottom bar), the only profile entry point is the top-right avatar. Schema v7 (`users.is_active`).
 - **2026-10-14** — Role key renamed `MANAGEMENT` → `ADMINISTRATION` (plus `administration_ids()`,
   `SENT_TO_ADMINISTRATION`, `/send-to-administration`, demo ids `admin-1`/`admin-2`). Schema v8.
+- **2026-10-14** — People & access is tab-aware: Add LHC / Add UHC member / Add administrator with role-specific
+  forms; per-role import (Download template, Start from the current list); Export dialog (this tab or everyone,
+  current filters, include access-off). UHC edit = seat hand-over (seat locked behind "Change seat details");
+  Position is a fixed select; one holder per seat enforced.
+- **2026-10-14** — Proposal "Venue" → **City** + **Location (name & map link)**; meetup page links to the given map. Schema v10.
+- **2026-10-14** — People & access: **List / Cards** view switch (saved per device; UHC cards are grouped by
+  house with their three seats); **no adding UHC members** (36 fixed seats, house/position locked). Atomic DB reset.
+- **2026-10-14** — UHC seat emails changed to the official format `<house>-sec|-ds|-webad@ds.study.iitm.ac.in`. Schema v9 (reseed).

@@ -72,7 +72,9 @@ CREATE TABLE meetups (
     backup_date        TEXT,                                      -- alternate date Administration may approve instead
     start_time         TEXT NOT NULL,                             -- HH:MM (24h)
     end_time           TEXT NOT NULL,                             -- HH:MM (24h)
-    venue              TEXT NOT NULL,                             -- meetups are offline-only
+    city               TEXT NOT NULL,                             -- meetups are offline-only
+    venue              TEXT NOT NULL,                             -- location name (shown as "Location")
+    map_link           TEXT NOT NULL,                             -- e.g. a Google Maps link to the location
     expected_attendees INTEGER NOT NULL CHECK (expected_attendees > 0),
     budget_per_head    INTEGER NOT NULL DEFAULT 200 CHECK (budget_per_head >= 0),  -- standard allowance (₹) at time of proposal
     extra_budget       INTEGER NOT NULL DEFAULT 0 CHECK (extra_budget >= 0),       -- on top of the allowance, e.g. venue booking

@@ -167,7 +167,7 @@ export function meetupRow(m, { extra } = {}) {
       <div class="row-title">${m.title}</div>
       <div class="row-meta">
         <span>${fmtTimeRange(m.start_time, m.end_time)}</span>
-        <span class="sep">${m.region_name}</span>${m.backup_date && ['PEER_REVIEW', 'PENDING'].includes(m.status) ? html`<span class="sep">or ${fmtDate(m.backup_date, { day: 'numeric', month: 'short' })}</span>` : ''}
+        <span class="sep">${m.city || m.region_name}</span>${m.backup_date && ['PEER_REVIEW', 'PENDING'].includes(m.status) ? html`<span class="sep">or ${fmtDate(m.backup_date, { day: 'numeric', month: 'short' })}</span>` : ''}
         <span class="sep truncate">${m.proposer_name}</span>
       </div>
     </div>
