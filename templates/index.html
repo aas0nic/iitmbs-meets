@@ -1,961 +1,163 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>IITM BS Student Activities — Meetup Approval Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#141317">
+  <title>Meetup Planner · IITM BS</title>
+  <link rel="icon" href="/static/img/iitm_logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css?v={{ v }}">
+  <script>
+    // Apply saved appearance before first paint (theme, accent, typeface) to avoid a flash.
+    (function () {
+      var p = {};
+      try { p = JSON.parse(localStorage.getItem('prefs') || '{}'); } catch (e) {}
+      var mode = p.mode || 'dark';
+      if (mode === 'system') mode = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      var d = document.documentElement;
+      d.dataset.theme = mode;
+      d.dataset.accent = p.accent || 'terracotta';
+      d.dataset.font = p.font || 'jakarta';
+      var fam = { jakarta: 'Plus+Jakarta+Sans:wght@400;500;600;700', inter: 'Inter:wght@400;500;600;700', geist: 'Geist:wght@400;500;600;700' }[d.dataset.font] || 'Plus+Jakarta+Sans:wght@400;500;600;700';
+      var l = document.createElement('link');
+      l.rel = 'stylesheet'; l.id = 'fontLink';
+      l.href = 'https://fonts.googleapis.com/css2?family=' + fam + '&family=JetBrains+Mono:wght@400;500&display=swap';
+      document.head.appendChild(l);
+      document.querySelector('meta[name="theme-color"]').content = { light: '#F3F0E9', dark: '#141317', black: '#000000' }[mode];
+    })();
+  </script>
 </head>
-<body class="theme-dark">
-  <!-- MOBILE BACKDROP OVERLAY -->
-  <div id="sidebarBackdrop" class="sidebar-backdrop hidden"></div>
+<body>
+  <!-- Icon sprite (Lucide-style, 24×24, stroke) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></symbol>
+      <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+      <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M5 3v18l2.5-1.5L10 21l2-1.5 2 1.5 2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5z"/><path d="M9 9h6M9 13h6"/></symbol>
+      <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M8 17v-5M13 17V8M18 17v-8"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+      <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+      <symbol id="i-video" viewBox="0 0 24 24"><path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+      <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v3m0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><path d="M21 12h-4a2 2 0 0 0 0 4h4z"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
+      <symbol id="i-swap" viewBox="0 0 24 24"><path d="m16 3 4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16"/></symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+      <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+      <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+      <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18"/></symbol>
+      <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+      <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></symbol>
+      <symbol id="i-palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="1.2"/><circle cx="17.5" cy="10.5" r="1.2"/><circle cx="8.5" cy="7.5" r="1.2"/><circle cx="6.5" cy="12.5" r="1.2"/><path d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.3A5.7 5.7 0 0 0 22 9.7C22 5.4 17.5 2 12 2z"/></symbol>
+      <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+    </defs>
+  </svg>
 
-  <div id="app" class="app-layout">
-    <!-- LEFT SIDEBAR (Matching IITM Student Activities Portal) -->
-    <aside id="sidebar" class="sidebar">
-      <div class="sidebar-header">
-        <div class="institute-brand">
-          <div class="brand-crest">
-            <img src="/static/img/iitm_logo.png" alt="IIT Madras" class="brand-crest-img">
-          </div>
-          <div class="brand-titles">
-            <h1 class="brand-name">Student Activities</h1>
-            <span class="brand-sub">IITM BS Degree</span>
-          </div>
-        </div>
-        <button id="sidebarToggleBtn" class="btn-icon sidebar-toggle desktop-only" title="Toggle Sidebar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
-        </button>
-        <button id="sidebarCloseBtn" class="btn-icon sidebar-close-mobile mobile-only" title="Close Menu">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  <!-- Sign-in (shown when there is no session) -->
+  <div id="signin" class="signin" hidden></div>
+
+  <!-- App shell -->
+  <div id="shell" class="shell" hidden>
+    <aside id="sidebar" class="sidebar" aria-label="Main navigation">
+      <div class="side-head">
+        <a class="brand" href="#/home">
+          <img src="/static/img/iitm_logo.png" alt="" width="28" height="28">
+          <span class="brand-text">
+            <strong>Meetup Planner</strong>
+            <small>IIT Madras BS Degree</small>
+          </span>
+        </a>
+        <button class="icon-btn side-toggle" data-action="collapse" type="button" aria-label="Collapse sidebar" data-tip="Collapse  [">
+          <svg class="i i-sm"><use href="#i-sidebar"/></svg>
         </button>
       </div>
-
-      <nav class="sidebar-nav">
-        <ul class="nav-list">
-          <li class="nav-item">
-            <button class="nav-link active" data-view="dashboard">
-              <span class="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-              </span>
-              <span class="nav-label">Home</span>
-            </button>
-          </li>
-          <li class="nav-item">
-            <button class="nav-link" data-view="meetups">
-              <span class="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="15" r="1"/></svg>
-              </span>
-              <span class="nav-label">Meetup Hub</span>
-              <span id="badgeMeetupPending" class="nav-pill-badge badge-warning">0</span>
-            </button>
-          </li>
-          <li class="nav-item">
-            <button class="nav-link" data-view="stats">
-              <span class="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-              </span>
-              <span class="nav-label">Overall Stats</span>
-            </button>
-          </li>
-          <li class="nav-item">
-            <button class="nav-link" data-view="reimbursements">
-              <span class="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/><line x1="7" y1="15" x2="7.01" y2="15"/><line x1="11" y1="15" x2="13" y2="15"/></svg>
-              </span>
-              <span class="nav-label">Reimbursements</span>
-              <span id="badgeReimbCount" class="nav-pill-badge highlight-pulse">0</span>
-            </button>
-          </li>
-          <li class="nav-item">
-            <button class="nav-link" data-view="invitations">
-              <span class="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"/></svg>
-              </span>
-              <span class="nav-label">Peer Invites</span>
-              <span id="badgeInvitesCount" class="nav-pill-badge">0</span>
-            </button>
-          </li>
-          <li class="nav-item">
-            <button class="nav-link" data-view="preferences">
-              <span class="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              </span>
-              <span class="nav-label">Preferences</span>
-            </button>
-          </li>
-        </ul>
-      </nav>
-
-      <div class="sidebar-footer">
-        <button id="openLoginModalBtn" class="sidebar-action-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-          <span>Switch / Auth</span>
+      <button class="nav-search" type="button" data-action="palette" data-tip="Search  ⌘K">
+        <svg class="i i-sm"><use href="#i-search"/></svg><span>Search</span><kbd>⌘K</kbd>
+      </button>
+      <nav id="nav" class="nav"></nav>
+      <div class="sidebar-foot">
+        <a class="nav-link" data-nav="settings" href="#/settings" data-tip="Settings">
+          <svg class="i"><use href="#i-settings"/></svg><span class="nav-label">Settings</span>
+        </a>
+        <button class="side-account" data-action="account" type="button" data-tip="Account">
+          <span id="sidebarAvatar" class="nav-avatar"></span>
+          <span class="side-account-text"><strong id="sidebarName"></strong><small id="sidebarRole"></small></span>
+          <svg class="i i-sm side-account-chev"><use href="#i-chevron-down"/></svg>
         </button>
-        <div class="theme-toggle-pill">
-          <button class="theme-mode-btn active" data-theme-mode="dark" title="Dark Mode">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          </button>
-          <button class="theme-mode-btn" data-theme-mode="system" title="Accent Glow">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          </button>
-        </div>
       </div>
     </aside>
+    <div id="scrim" class="scrim" hidden></div>
 
-    <!-- MAIN WRAPPER -->
-    <div class="main-wrapper">
-      <!-- MOBILE HEADER BAR (SHOWN ON MOBILE PHONES & TABLETS) -->
-      <div class="mobile-header-bar mobile-only">
-        <button id="mobileMenuBtn" class="btn-icon mobile-menu-btn" aria-label="Open Navigation">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn only-mobile" data-action="drawer" type="button" aria-label="Open menu">
+          <svg class="i"><use href="#i-menu"/></svg>
         </button>
-        <div class="mobile-brand">
-          <img src="/static/img/iitm_logo.png" alt="IITM Logo" class="mobile-brand-img">
-          <span class="mobile-brand-title">Student Activities</span>
-        </div>
-        <div class="mobile-header-actions">
-          <button id="mobileProposeBtn" class="mobile-action-circle mobile-action-primary" title="Propose Meetup">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <a class="topbar-brand only-mobile" href="#/home">
+          <img src="/static/img/iitm_logo.png" alt="" width="26" height="26">
+          <span>Meetup Planner</span>
+        </a>
+        <div class="topbar-title hide-mobile" id="topbarTitle"></div>
+        <div class="topbar-actions">
+          <a class="btn btn-primary btn-sm hide-mobile" id="newProposalBtn" href="#/new" hidden>
+            <svg class="i"><use href="#i-plus"/></svg> New proposal
+          </a>
+          <a class="icon-btn only-mobile" id="newProposalIcon" href="#/new" aria-label="New proposal" hidden>
+            <svg class="i"><use href="#i-plus"/></svg>
+          </a>
+          <button class="icon-btn only-mobile" data-action="palette" type="button" aria-label="Search">
+            <svg class="i"><use href="#i-search"/></svg>
           </button>
-          <button id="mobileNotifBtn" class="mobile-action-circle" title="Notifications">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            <span id="mobileNotifDot" class="notif-badge hidden">0</span>
+          <button class="icon-btn" data-action="notifications" type="button" aria-label="Notifications">
+            <svg class="i"><use href="#i-bell"/></svg>
+            <span class="dot-badge" id="notifBadge" hidden></span>
           </button>
-          <button id="mobileRoleModalBtn" class="mobile-avatar-btn" title="Switch User Role">
-            <img id="mobileUserAvatarImg" src="https://api.dicebear.com/7.x/avataaars/svg?seed=LHC_11_5" alt="Avatar" class="avatar-sm">
+          <button class="account-chip" data-action="account" type="button" aria-label="Account">
+            <span id="topbarAvatar"></span>
+            <span class="account-chip-text hide-tablet">
+              <strong id="topbarName"></strong>
+              <small id="topbarRole"></small>
+            </span>
+            <svg class="i i-sm hide-tablet"><use href="#i-chevron-down"/></svg>
           </button>
-        </div>
-      </div>
-
-      <!-- DESKTOP TOPBAR -->
-      <header class="topbar desktop-topbar">
-        <div class="topbar-left">
-          <div class="breadcrumbs">
-            <span class="crumb-root">Student Activities</span>
-            <span class="crumb-separator">/</span>
-            <span id="currentViewCrumb" class="crumb-current">Home</span>
-          </div>
-        </div>
-
-        <div class="topbar-right">
-          <!-- Role Switcher Shortcuts (for testing all roles easily) -->
-          <div class="quick-role-picker" title="Switch active user session">
-            <span class="picker-label">Active Role:</span>
-            <div class="role-pill-group">
-              <button class="role-quick-btn" data-user-id="mgmt-1" title="Dr. Andrew (Dean / Student Activities Lead)">
-                👑 Mgmt
-              </button>
-              <button class="role-quick-btn" data-user-id="uhc-11-1" title="Vikram (Sundarbans UHC Lead)">
-                🏛️ UHC
-              </button>
-              <button class="role-quick-btn active" data-user-id="lhc-11-5" title="Rahul Verma (Sundarbans LHC Proposer, Mumbai)">
-                ✍️ LHC Host
-              </button>
-              <button class="role-quick-btn" data-user-id="lhc-2-5" title="Sneha Roy (Corbett LHC Peer, Mumbai)">
-                👥 Peer
-              </button>
-            </div>
-          </div>
-
-          <!-- Propose Meetup Action Button -->
-          <button id="btnOpenProposeModal" class="btn btn-primary btn-sm">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span>Propose Meetup</span>
-          </button>
-
-          <!-- Notifications Tray -->
-          <div class="notif-dropdown-wrapper">
-            <button id="notifBellBtn" class="btn-icon" title="Notifications">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              <span id="notifUnreadBadge" class="notif-badge">0</span>
-            </button>
-            <div id="notifPanel" class="notif-panel hidden">
-              <div class="notif-header">
-                <h3>Notifications</h3>
-                <button id="btnMarkNotifsRead" class="btn-text">Mark all read</button>
-              </div>
-              <div id="notifList" class="notif-list">
-                <!-- Notifications injected here -->
-              </div>
-            </div>
-          </div>
-
-          <!-- Active User Badge -->
-          <div class="active-profile-chip" id="userProfileChip">
-            <img id="userAvatarImg" src="https://api.dicebear.com/7.x/avataaars/svg?seed=LHC_11_5" alt="Avatar" class="avatar-sm">
-            <div class="user-chip-meta">
-              <span id="userNameLabel" class="user-chip-name">Rahul Verma</span>
-              <span id="userRoleBadge" class="user-chip-role role-lhc">LHC • Sundarbans • Mumbai</span>
-            </div>
-          </div>
         </div>
       </header>
 
-      <!-- CONTENT SECTIONS -->
-      <main class="content-container">
-
-        <!-- VIEW 1: DASHBOARD -->
-        <section id="viewDashboard" class="view-section active">
-          <!-- Banner Card -->
-          <div class="welcome-banner">
-            <div class="banner-content">
-              <div class="banner-badge">IIT Madras BS Degree • Student Activities</div>
-              <h2 class="banner-title">Meetup Proposal & Governance Hub</h2>
-              <p class="banner-desc">
-                Organize cross-house regional meetups with local peers. Submit detailed proposals directly for Management review and track approval status seamlessly.
-              </p>
-              <div class="banner-actions">
-                <button class="btn btn-primary" onclick="window.app.openProposeModal()">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                  Request New Meetup
-                </button>
-                <button class="btn btn-secondary" onclick="window.app.switchView('meetups')">
-                  Browse All Meetups
-                </button>
-              </div>
-            </div>
-            <div class="banner-stat-chips">
-              <div class="stat-glass-card">
-                <span class="stat-number" id="statPendingCount">0</span>
-                <span class="stat-label">Pending Approval</span>
-              </div>
-              <div class="stat-glass-card">
-                <span class="stat-number" id="statApprovedCount">0</span>
-                <span class="stat-label">Approved Meets</span>
-              </div>
-              <div class="stat-glass-card">
-                <span class="stat-number" id="statCompletedCount">0</span>
-                <span class="stat-label">Completed Meets 🏁</span>
-              </div>
-              <div class="stat-glass-card">
-                <span class="stat-number" id="statReimbCount">0</span>
-                <span class="stat-label">Pending Reimbursements</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Quick Navigation / Role Callout -->
-          <div id="roleAlertBanner" class="role-callout-card">
-            <!-- Dynamically populated according to active role -->
-          </div>
-
-          <!-- Recent Meetups Grid -->
-          <div class="section-heading-bar">
-            <div>
-              <h3 class="section-title">Active & Recent Meetup Requests</h3>
-              <p class="section-subtitle">Real-time status of student-led gatherings across all 10 regions</p>
-            </div>
-            <button class="btn btn-ghost btn-sm" onclick="window.app.switchView('meetups')">View Full Registry &rarr;</button>
-          </div>
-
-          <div id="dashboardMeetupsGrid" class="meetups-grid">
-            <!-- Meetup cards loaded dynamically -->
-          </div>
-        </section>
-
-        <!-- VIEW 2: MEETUP HUB (Registry & Filters) -->
-        <section id="viewMeetups" class="view-section">
-          <div class="view-header">
-            <div>
-              <h2 class="view-title">Meetup Hub & Governance Registry</h2>
-              <p class="view-subtitle">Dedicated view for Pending Approvals, Approved, Completed, and Rejected student meetups</p>
-            </div>
-            <button class="btn btn-primary" onclick="window.app.openProposeModal()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              <span>Propose Meetup</span>
-            </button>
-          </div>
-
-          <!-- Filter Toolbar -->
-          <div class="filter-toolbar card">
-            <div class="filter-group">
-              <label class="filter-label">Filter Status:</label>
-              <div class="segmented-control" id="statusFilterPills">
-                <button class="segmented-btn active" data-filter="ALL">All</button>
-                <button class="segmented-btn" data-filter="PENDING">Pending Review</button>
-                <button class="segmented-btn" data-filter="APPROVED">Approved</button>
-                <button class="segmented-btn" data-filter="COMPLETED">Completed 🏁</button>
-                <button class="segmented-btn" data-filter="REJECTED">Rejected</button>
-              </div>
-            </div>
-
-            <div class="filter-selects">
-              <div class="input-field-group">
-                <label for="regionFilterSelect" class="input-label-sm">Region:</label>
-                <select id="regionFilterSelect" class="form-select-sm">
-                  <option value="">All 10 Regions</option>
-                  <!-- Populated dynamically -->
-                </select>
-              </div>
-              <div class="input-field-group">
-                <label for="houseFilterSelect" class="input-label-sm">House:</label>
-                <select id="houseFilterSelect" class="form-select-sm">
-                  <option value="">All 12 Houses</option>
-                  <!-- Populated dynamically -->
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div id="meetupsListGrid" class="meetups-grid">
-            <!-- Meetups dynamically rendered -->
-          </div>
-        </section>
-
-        <!-- VIEW 3: PEER INVITATIONS -->
-        <section id="viewInvitations" class="view-section">
-          <div class="view-header">
-            <div>
-              <h2 class="view-title">Regional Peer Invitations</h2>
-              <p class="view-subtitle">Meetups in your region where fellow LHCs have invited you to co-host or participate</p>
-            </div>
-          </div>
-
-          <div id="invitationsContainer" class="invitations-container">
-            <!-- Dynamically populated invitations -->
-          </div>
-        </section>
-
-        <!-- VIEW 4: OVERALL STATS (HOUSE & REGIONAL BREAKDOWN) -->
-        <section id="viewStats" class="view-section">
-          <div class="view-header">
-            <div>
-              <div class="management-badge">Institutional Analytics</div>
-              <h2 class="view-title">Overall Stats (House & Region Breakdown)</h2>
-              <p class="view-subtitle">Cross-dimensional metrics across all 12 Houses and 10 Geographic Regions</p>
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="window.app.loadOverallStats()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-              <span>Refresh Stats</span>
-            </button>
-          </div>
-
-          <!-- Overall KPI Row -->
-          <div class="stats-overview-kpi-grid">
-            <div class="stat-glass-card">
-              <span class="stat-number" id="statKpiTotal">0</span>
-              <span class="stat-label">Total Proposed Meetups</span>
-            </div>
-            <div class="stat-glass-card">
-              <span class="stat-number" id="statKpiApproved">0</span>
-              <span class="stat-label">Approved & Upcoming</span>
-            </div>
-            <div class="stat-glass-card">
-              <span class="stat-number" id="statKpiCompleted">0</span>
-              <span class="stat-label">Completed Meets 🏁</span>
-            </div>
-            <div class="stat-glass-card">
-              <span class="stat-number" id="statKpiAttendance">0</span>
-              <span class="stat-label">Students Turnout</span>
-            </div>
-            <div class="stat-glass-card">
-              <span class="stat-number" id="statKpiReimbTotal">₹ 0</span>
-              <span class="stat-label">Reimbursements Disbursed</span>
-            </div>
-          </div>
-
-          <!-- Showcase View Mode Switcher -->
-          <div class="stats-view-switch-bar mt-4">
-            <div class="segmented-control" id="statsViewFilterPills">
-              <button class="segmented-btn active" data-stats-mode="ALL">Full Overview</button>
-              <button class="segmented-btn" data-stats-mode="CARDS">Official Houses & Regions Grid</button>
-              <button class="segmented-btn" data-stats-mode="TABLES">Analytical Breakdown Tables</button>
-            </div>
-          </div>
-
-          <!-- SECTION: OFFICIAL 12 HOUSES GRID (MATCHING INSTITUTE PORTAL SCREENSHOT) -->
-          <div class="stats-breakdown-section mt-4" id="sectionHousesShowcase">
-            <div class="section-heading-bar">
-              <div>
-                <h3 class="section-title">Official Houses of IIT Madras BS Degree (12 Houses)</h3>
-                <p class="section-subtitle">National parks & reserves heritage representing the 12 vertical student communities (10 LHCs & 3 UHCs each)</p>
-              </div>
-            </div>
-            <div class="portal-houses-grid" id="portalHousesGrid">
-              <!-- Dynamically populated from bootstrap data -->
-            </div>
-          </div>
-
-          <!-- SECTION: OFFICIAL 10 REGIONS GRID (MATCHING INSTITUTE PORTAL SCREENSHOT) -->
-          <div class="stats-breakdown-section mt-4" id="sectionRegionsShowcase">
-            <div class="section-heading-bar">
-              <div>
-                <span class="portal-regions-label">REGIONS LIST</span>
-                <p class="section-subtitle">10 geographic clusters connecting local student peers across all 12 houses</p>
-              </div>
-            </div>
-            <div class="portal-regions-grid" id="portalRegionsGrid">
-              <!-- Dynamically populated from bootstrap data -->
-            </div>
-          </div>
-
-          <!-- House Breakdown Table/Cards -->
-          <div class="stats-breakdown-section mt-4" id="sectionHousesTable">
-            <div class="section-heading-bar">
-              <div>
-                <h3 class="section-title">1. Meetup Breakdown by House (12 Houses)</h3>
-                <p class="section-subtitle">Each of the 12 houses has 10 LHC representatives and 3 UHC leaders</p>
-              </div>
-            </div>
-            <div class="card table-card">
-              <div class="table-responsive">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>House Name</th>
-                      <th>Total Meets</th>
-                      <th>Pending Review</th>
-                      <th>Approved</th>
-                      <th>Completed</th>
-                      <th>Turnout (Students)</th>
-                      <th>Activity Index</th>
-                    </tr>
-                  </thead>
-                  <tbody id="statsHouseTableBody">
-                    <!-- Populated dynamically -->
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- Region Breakdown Table/Cards -->
-          <div class="stats-breakdown-section mt-4" id="sectionRegionsTable">
-            <div class="section-heading-bar">
-              <div>
-                <h3 class="section-title">2. Meetup Breakdown by Region (10 Regions)</h3>
-                <p class="section-subtitle">Each geographic region hosts ~12 LHC members representing diverse houses</p>
-              </div>
-            </div>
-            <div class="card table-card">
-              <div class="table-responsive">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Region Code & Name</th>
-                      <th>States Covered</th>
-                      <th>Total Meets</th>
-                      <th>Approved</th>
-                      <th>Completed</th>
-                      <th>Turnout (Students)</th>
-                      <th>Coverage Status</th>
-                    </tr>
-                  </thead>
-                  <tbody id="statsRegionTableBody">
-                    <!-- Populated dynamically -->
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- VIEW 5: REIMBURSEMENTS SECTION -->
-        <section id="viewReimbursements" class="view-section">
-          <div class="view-header">
-            <div>
-              <div class="management-badge">Financial Governance & Payouts</div>
-              <h2 class="view-title">Post-Meetup Reimbursement Claims</h2>
-              <p class="view-subtitle">Review submitted attendance proofs, verified bills, and disburse reimbursements for completed meetups</p>
-            </div>
-          </div>
-
-          <!-- Reimbursement Filters Toolbar -->
-          <div class="filter-toolbar card">
-            <div class="filter-group">
-              <label class="filter-label">Claim Status:</label>
-              <div class="segmented-control" id="reimbFilterPills">
-                <button class="segmented-btn active" data-filter="ALL">All Claims</button>
-                <button class="segmented-btn" data-filter="PENDING_REVIEW">Pending Review</button>
-                <button class="segmented-btn" data-filter="IN_PROGRESS">In Progress</button>
-                <button class="segmented-btn" data-filter="APPROVED">Approved / Paid</button>
-                <button class="segmented-btn" data-filter="REJECTED">Rejected</button>
-              </div>
-            </div>
-          </div>
-
-          <div id="reimbursementsListContainer" class="reimbursements-grid">
-            <!-- Dynamically populated reimbursement claims -->
-          </div>
-        </section>
-
-        <!-- VIEW 7: PREFERENCES (Visual Match to Portal Screenshot) -->
-        <section id="viewPreferences" class="view-section">
-          <div class="view-header">
-            <div>
-              <h2 class="view-title">Preferences & Dashboard Settings</h2>
-              <p class="view-subtitle">Customize your dashboard experience, sidebar mode, and accent themes</p>
-            </div>
-          </div>
-
-          <div class="settings-grid">
-            <!-- Sidebar Behavior Card -->
-            <div class="settings-card card">
-              <div class="card-header">
-                <h3 class="card-title">Sidebar Behavior</h3>
-                <p class="card-subtitle">Configure sidebar collapse mode and placement</p>
-              </div>
-
-              <div class="setting-row">
-                <label class="setting-label">
-                  <span class="setting-icon">📐</span> Expand Mode
-                </label>
-                <div class="segmented-control full-width">
-                  <button class="segmented-btn active" data-pref="expand-mode" data-val="persistent">Persistent</button>
-                  <button class="segmented-btn" data-pref="expand-mode" data-val="hover">Hover to Expand</button>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <label class="setting-label">
-                  <span class="setting-icon">⇆</span> Position
-                </label>
-                <div class="segmented-control full-width">
-                  <button class="segmented-btn active" data-pref="position" data-val="left">Left</button>
-                  <button class="segmented-btn" data-pref="position" data-val="right">Right</button>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <label class="setting-label">
-                  <span class="setting-icon">🖥️</span> Default State
-                </label>
-                <div class="segmented-control full-width">
-                  <button class="segmented-btn active" data-pref="default-state" data-val="expanded">Expanded</button>
-                  <button class="segmented-btn" data-pref="default-state" data-val="collapsed">Collapsed</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Theme & Colors Card (Faithful to Screenshot) -->
-            <div class="settings-card card">
-              <div class="card-header flex-between">
-                <div>
-                  <h3 class="card-title">Theme & Colors</h3>
-                  <p class="card-subtitle">Customize accent colors and choose from presets</p>
-                </div>
-                <button class="btn-text" id="btnResetTheme">Reset</button>
-              </div>
-
-              <div class="setting-row">
-                <label class="setting-label">Presets</label>
-                <div class="preset-theme-grid">
-                  <div class="preset-item active" data-preset="iitm">
-                    <div class="color-dots">
-                      <span style="background: #E05D2D;"></span>
-                      <span style="background: #800000;"></span>
-                      <span style="background: #FBBF24;"></span>
-                    </div>
-                    <span class="preset-name">IITM BS</span>
-                  </div>
-                  <div class="preset-item" data-preset="dracula">
-                    <div class="color-dots">
-                      <span style="background: #BD93F9;"></span>
-                      <span style="background: #FF79C6;"></span>
-                      <span style="background: #8BE9FD;"></span>
-                    </div>
-                    <span class="preset-name">Dracula</span>
-                  </div>
-                  <div class="preset-item" data-preset="catppuccin">
-                    <div class="color-dots">
-                      <span style="background: #CBA6F7;"></span>
-                      <span style="background: #F5C2E7;"></span>
-                      <span style="background: #89B4FA;"></span>
-                    </div>
-                    <span class="preset-name">Catppuccin</span>
-                  </div>
-                  <div class="preset-item" data-preset="nord">
-                    <div class="color-dots">
-                      <span style="background: #88C0D0;"></span>
-                      <span style="background: #81A1C1;"></span>
-                      <span style="background: #5E81AC;"></span>
-                    </div>
-                    <span class="preset-name">Nord</span>
-                  </div>
-                  <div class="preset-item" data-preset="gruvbox">
-                    <div class="color-dots">
-                      <span style="background: #FE8019;"></span>
-                      <span style="background: #FABD2F;"></span>
-                      <span style="background: #B8BB26;"></span>
-                    </div>
-                    <span class="preset-name">Gruvbox</span>
-                  </div>
-                  <div class="preset-item" data-preset="tokyo-night">
-                    <div class="color-dots">
-                      <span style="background: #7AA2F7;"></span>
-                      <span style="background: #BB9AF7;"></span>
-                      <span style="background: #7DCFFF;"></span>
-                    </div>
-                    <span class="preset-name">Tokyo Night</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <label class="setting-label">Custom Accent Colors</label>
-                <div class="custom-color-inputs">
-                  <div class="color-picker-row">
-                    <span class="color-label">Accent Color</span>
-                    <div class="color-input-badge">
-                      <span class="color-preview" style="background: #E05D2D;"></span>
-                      <input type="text" class="color-hex-val" value="#E05D2D" readonly>
-                    </div>
-                  </div>
-                  <div class="color-picker-row">
-                    <span class="color-label">Primary Institute Maroon</span>
-                    <div class="color-input-badge">
-                      <span class="color-preview" style="background: #800000;"></span>
-                      <input type="text" class="color-hex-val" value="#800000" readonly>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Database & System Architecture Card -->
-            <div class="settings-card card full-col">
-              <div class="card-header">
-                <h3 class="card-title">Database Storage & State</h3>
-                <p class="card-subtitle">Current persistent storage is powered by local SQLite (`data/iitmbs_meets.db`)</p>
-              </div>
-              <div class="storage-info-box">
-                <p>
-                  <strong>Where is data stored?</strong> All users (120 LHC, 36 UHC, Management), houses, regional allocations, meetup proposals, peer invitations, and notifications are stored in <code>data/iitmbs_meets.db</code> via Python's embedded SQLite engine.
-                </p>
-                <p class="mt-2 text-muted">
-                  You can reset the database back to clean seed conditions at any time:
-                </p>
-                <button id="btnResetDatabase" class="btn btn-danger btn-sm mt-3">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
-                  Reset to Default Seed Data
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
+      <main id="view" class="view" tabindex="-1"></main>
     </div>
+
+    <nav id="tabbar" class="tabbar" aria-label="Quick navigation"></nav>
   </div>
 
-  <!-- MODAL: PROPOSE MEETUP WIZARD -->
-  <div id="modalProposeMeetup" class="modal-backdrop hidden">
-    <div class="modal-container">
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-title">Propose a Regional Meetup</h2>
-          <p class="modal-subtitle">Submit details for Management review and invite peers from your assigned region</p>
-        </div>
-        <button class="modal-close-btn" onclick="window.app.closeModal('modalProposeMeetup')">&times;</button>
-      </div>
+  <!-- Overlays -->
+  <div id="popover" class="popover" hidden></div>
+  <div id="palette" class="palette" hidden></div>
+  <dialog id="dialog" class="dialog"></dialog>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
 
-      <form id="formProposeMeetup" class="modal-body">
-        <div class="form-grid">
-          <div class="form-group full-width">
-            <label class="form-label">Meetup Title *</label>
-            <input type="text" id="propTitle" class="form-input" placeholder="e.g. Pune BS AI & Machine Learning Jam" required>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Category *</label>
-            <select id="propCategory" class="form-select" required>
-              <option value="Study Jam">Study Jam & Exam Prep</option>
-              <option value="Hackathon">Hackathon / Coding Sprint</option>
-              <option value="Project Collaboration">Project Collaboration</option>
-              <option value="Peer Networking">Peer Networking & Social</option>
-              <option value="Alumni Talk">Alumni / Industry Interactive Session</option>
-              <option value="Cultural / Sports">Cultural & Sports Meet</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Mode *</label>
-            <select id="propMode" class="form-select" required>
-              <option value="IN_PERSON">In-Person (Physical Venue)</option>
-              <option value="HYBRID">Hybrid (Physical + Virtual Stream)</option>
-              <option value="VIRTUAL">Virtual (Google Meet / Zoom)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Date *</label>
-            <input type="date" id="propDate" class="form-input" required>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Time Window *</label>
-            <div class="time-range-inputs">
-              <input type="text" id="propStartTime" class="form-input" placeholder="10:00 AM" required>
-              <span class="range-sep">to</span>
-              <input type="text" id="propEndTime" class="form-input" placeholder="03:00 PM" required>
-            </div>
-          </div>
-
-          <div class="form-group full-width">
-            <label class="form-label">Venue / Meeting Link *</label>
-            <input type="text" id="propVenue" class="form-input" placeholder="e.g. 91springboard, BKC, Mumbai (or Google Meet Link)" required>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Expected Turnout (Students)</label>
-            <input type="number" id="propAttendees" class="form-input" value="25" min="5" max="200">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Estimated Budget Needed</label>
-            <input type="text" id="propBudget" class="form-input" placeholder="e.g. ₹ 2,000 (or ₹ 0 for free venue)">
-          </div>
-
-          <div class="form-group full-width">
-            <label class="form-label">Objectives & Agenda *</label>
-            <textarea id="propDescription" class="form-textarea" rows="3" placeholder="Outline the plan, topics to cover, schedule, and expected outcomes..." required></textarea>
-          </div>
-
-          <!-- REGIONAL PEER INVITATION SECTION -->
-          <div class="form-group full-width regional-peer-selector-section">
-            <div class="peer-header-bar">
-              <div>
-                <label class="form-label mb-0">Invite Regional LHC Peers</label>
-                <p class="peer-sub-label" id="peerRegionNotice">
-                  Showing fellow LHC members from your region: <strong>Loading...</strong>
-                </p>
-              </div>
-              <button type="button" class="btn-text" id="btnSelectAllPeers">Select All in Region</button>
-            </div>
-
-            <div id="peerCheckboxList" class="peer-checkbox-list">
-              <!-- Dynamically populated only with LHCs in same region -->
-            </div>
-            <span class="peer-count-status" id="peerSelectedCount">0 peers selected to invite</span>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('modalProposeMeetup')">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="btnSubmitProposal">Submit Proposal to Management</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL: MANAGEMENT REVIEW -->
-  <div id="modalManagementReview" class="modal-backdrop hidden">
-    <div class="modal-container modal-md">
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-title">Review Meetup Proposal</h2>
-          <p class="modal-subtitle" id="mgmtReviewSub">Evaluate proposal validity and issue approval or rejection</p>
-        </div>
-        <button class="modal-close-btn" onclick="window.app.closeModal('modalManagementReview')">&times;</button>
-      </div>
-
-      <div class="modal-body" id="mgmtReviewBody">
-        <!-- Injected dynamically -->
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: MEETUP DETAIL DRAWER -->
-  <div id="modalMeetupDetails" class="modal-backdrop hidden">
-    <div class="modal-container modal-md">
-      <div class="modal-header">
-        <div>
-          <span class="badge" id="modalDetailStatusBadge">PENDING</span>
-          <h2 class="modal-title mt-1" id="modalDetailTitle">Meetup Title</h2>
-        </div>
-        <button class="modal-close-btn" onclick="window.app.closeModal('modalMeetupDetails')">&times;</button>
-      </div>
-      <div class="modal-body" id="modalDetailBody">
-        <!-- Injected dynamically -->
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: AUTH / SWITCH USER -->
-  <div id="modalAuth" class="modal-backdrop hidden">
-    <div class="modal-container modal-sm">
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-title">Authentication & Switch</h2>
-          <p class="modal-subtitle">Sign in or switch test credentials</p>
-        </div>
-        <button class="modal-close-btn" onclick="window.app.closeModal('modalAuth')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <button class="btn btn-google-sso full-width mb-3" id="btnGoogleAuth">
-          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
-          Continue with IITM Student Email
-        </button>
-
-        <div class="or-divider"><span>OR QUICK SELECT USER</span></div>
-
-        <div class="user-switch-list" id="quickUserSwitchList">
-          <!-- Populated from demo_users -->
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: REIMBURSEMENT REVIEW (MANAGEMENT) -->
-  <div id="modalReimbursementReview" class="modal-backdrop hidden">
-    <div class="modal-container modal-md">
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-title">Review Reimbursement Claim</h2>
-          <p class="modal-subtitle">Verify attendance proof, bills, and approve or request revisions</p>
-        </div>
-        <button class="modal-close-btn" onclick="window.app.closeModal('modalReimbursementReview')">&times;</button>
-      </div>
-      <div class="modal-body" id="reimbReviewBody">
-        <!-- Injected dynamically -->
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: SUBMIT REIMBURSEMENT (LHC) -->
-  <div id="modalClaimReimbursement" class="modal-backdrop hidden">
-    <div class="modal-container modal-md">
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-title">Submit Meetup Reimbursement</h2>
-          <p class="modal-subtitle">Provide verified attendance count, expenditure description, receipts and payout details</p>
-        </div>
-        <button class="modal-close-btn" onclick="window.app.closeModal('modalClaimReimbursement')">&times;</button>
-      </div>
-      <form id="formClaimReimbursement" class="modal-body">
-        <input type="hidden" id="claimMeetupId">
-        <div class="form-grid">
-          <div class="form-group full-width">
-            <label class="form-label">Meetup Event *</label>
-            <input type="text" id="claimMeetupTitle" class="form-input" readonly>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Total Amount Claimed (₹) *</label>
-            <input type="number" id="claimAmount" class="form-input" placeholder="e.g. 2400" min="1" step="0.01" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Actual Attendance (Students) *</label>
-            <input type="number" id="claimAttendance" class="form-input" placeholder="e.g. 28" min="1" required>
-          </div>
-          <div class="form-group full-width">
-            <label class="form-label">Attendance Verification Proof & Notes *</label>
-            <textarea id="claimAttendanceNotes" class="form-textarea" rows="2" placeholder="e.g. 28 students signed the physical roll sheet; verified via QR code check-in & event group photograph." required></textarea>
-          </div>
-          <div class="form-group full-width">
-            <label class="form-label">Itemized Bills Breakdown *</label>
-            <textarea id="claimBillsDescription" class="form-textarea" rows="2" placeholder="e.g. Snacks & tea (₹ 1,700), Whiteboard markers & stationery (₹ 350), Hall booking slip (₹ 350)." required></textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Bills / Receipt Files (Upload / Names) *</label>
-            <input type="text" id="claimReceiptsFileName" class="form-input" placeholder="e.g. CCD_Bill_INV981.pdf, Hall_Receipt.jpg" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Bank Account / UPI ID for Disbursement *</label>
-            <input type="text" id="claimBankDetails" class="form-input" placeholder="e.g. student@oksbi (or SBI A/C 123456...)" required>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('modalClaimReimbursement')">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="btnSubmitClaim">Submit Claim to Management</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MOBILE BOTTOM NAVIGATION (FIXED ON PHONES & TABLETS) -->
-  <nav class="mobile-bottom-nav mobile-only" aria-label="Mobile Navigation">
-    <button class="mobile-nav-item active" data-view="dashboard">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      <span>Home</span>
-    </button>
-    <button class="mobile-nav-item" data-view="meetups">
-      <div class="mobile-icon-badge-wrap">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="15" r="1"/></svg>
-        <span id="mobileBadgeMeetup" class="mobile-badge hidden">0</span>
-      </div>
-      <span>Meetups</span>
-    </button>
-    <button class="mobile-nav-item" data-view="stats">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-      <span>Stats</span>
-    </button>
-    <button class="mobile-nav-item" data-view="reimbursements">
-      <div class="mobile-icon-badge-wrap">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/><line x1="7" y1="15" x2="7.01" y2="15"/><line x1="11" y1="15" x2="13" y2="15"/></svg>
-        <span id="mobileBadgeReimb" class="mobile-badge hidden">0</span>
-      </div>
-      <span>Claims</span>
-    </button>
-    <button class="mobile-nav-item" id="mobileBottomRoleBtn">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      <span>Role</span>
-    </button>
-  </nav>
-
-  <!-- QUICK ROLE SWITCH MODAL (FOR MOBILE & INSTANT SWITCHING) -->
-  <div id="modalRoleSwitch" class="modal-backdrop hidden">
-    <div class="modal-container modal-sm mobile-sheet">
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-title">Select Active Session Role</h2>
-          <p class="modal-subtitle">Switch test persona to explore approval & invitation workflows</p>
-        </div>
-        <button class="modal-close-btn" onclick="window.app.closeModal('modalRoleSwitch')">&times;</button>
-      </div>
-      <div class="modal-body quick-role-select-list">
-        <button class="quick-role-select-card" onclick="window.app.switchUser('mgmt-1'); window.app.closeModal('modalRoleSwitch');">
-          <div class="role-select-avatar">
-            <img src="https://api.dicebear.com/7.x/bottts/svg?seed=AndrewDean" alt="Management">
-          </div>
-          <div class="role-select-info">
-            <div class="role-select-title">Dr. Andrew Dean <span class="role-badge-pill role-mgmt-badge">👑 Management</span></div>
-            <div class="role-select-desc">Dean of Student Activities • Central Authority</div>
-          </div>
-        </button>
-
-        <button class="quick-role-select-card" onclick="window.app.switchUser('uhc-11-1'); window.app.closeModal('modalRoleSwitch');">
-          <div class="role-select-avatar">
-            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=UHC_11_1" alt="UHC">
-          </div>
-          <div class="role-select-info">
-            <div class="role-select-title">Vikram (UHC Lead) <span class="role-badge-pill role-uhc-badge">🏛️ UHC</span></div>
-            <div class="role-select-desc">Sundarbans House Lead • Advisory & Oversight</div>
-          </div>
-        </button>
-
-        <button class="quick-role-select-card active" onclick="window.app.switchUser('lhc-11-5'); window.app.closeModal('modalRoleSwitch');">
-          <div class="role-select-avatar">
-            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=LHC_11_5" alt="LHC Host">
-          </div>
-          <div class="role-select-info">
-            <div class="role-select-title">Rahul Verma <span class="role-badge-pill role-lhc-badge">✍️ LHC Host</span></div>
-            <div class="role-select-desc">Sundarbans House • Mumbai Region (Event Proposer)</div>
-          </div>
-        </button>
-
-        <button class="quick-role-select-card" onclick="window.app.switchUser('lhc-2-5'); window.app.closeModal('modalRoleSwitch');">
-          <div class="role-select-avatar">
-            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=LHC_2_5" alt="Regional Peer">
-          </div>
-          <div class="role-select-info">
-            <div class="role-select-title">Sneha Roy <span class="role-badge-pill role-lhc-badge">👥 Peer</span></div>
-            <div class="role-select-desc">Corbett House • Mumbai Region (Co-Host Invitee)</div>
-          </div>
-        </button>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-block" onclick="window.app.closeModal('modalRoleSwitch'); window.app.openModal('modalAuth');">
-          View All 158 Users (Directory Switch)
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <div id="toastContainer" class="toast-container"></div>
-
-  <script src="/static/js/app.js?v={{ v }}"></script>
+  <script type="module" src="/static/js/app.js?v={{ v }}"></script>
 </body>
 </html>

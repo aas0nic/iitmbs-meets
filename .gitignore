@@ -4,3 +4,6 @@ __pycache__/
 .DS_Store
 instance/
 *.db-journal
+data/*.db
+data/uploads/
+data/.secret_key

@@ -174,7 +174,7 @@ sequenceDiagram
     DB-->>Server: Return regional peers list
     Server-->>Proposer: Display peers with House tags and checkboxes
     Proposer->>Server: POST /api/meetups (details + selected invitee IDs)
-    Server->>DB: Insert meetup_proposals (status='PENDING')
+    Server->>DB: Insert meetups (status='PEER_REVIEW', or 'PENDING' with no invites)
     Server->>DB: Insert meetup_invitations (status='INVITED')
     Server->>DB: Insert notifications for Proposer, Mgmt, & Invited Peers
     Server-->>Proposer: 201 Created Confirmation
@@ -211,30 +211,25 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Draft : Proposer opens creation form
-    Draft --> PendingReview : Submitted with regional invites
-    
-    state PeerParticipation {
-        [*] --> Invited
-        Invited --> Accepted : Peer clicks Accept
-        Invited --> Declined : Peer clicks Decline
-    }
-
-    state PendingReview {
-        [*] --> AwaitingManagement
-        AwaitingManagement --> PeerParticipation
-    }
-
-    PendingReview --> Approved : Management Approves
-    PendingReview --> Rejected : Management Rejects (with remarks)
-
-    Approved --> PublishedCalendar : Visible to all students in Region
-    Rejected --> Draft : Proposer can revise & resubmit
-    PublishedCalendar --> Completed : Event date elapses
-    PublishedCalendar --> Cancelled : Force cancelled by Management
-    Completed --> [*]
-    Cancelled --> [*]
+    [*] --> DRAFT : LHC saves a proposal
+    DRAFT --> PEER_REVIEW : Submit (has co-host invites)
+    DRAFT --> PENDING : Submit (no invites)
+    PEER_REVIEW --> PENDING : Last invitee replies / host sends now
+    PEER_REVIEW --> DRAFT : Host withdraws
+    PENDING --> DRAFT : Host withdraws
+    PENDING --> APPROVED : Management approves
+    PENDING --> REJECTED : Management rejects (feedback mandatory)
+    REJECTED --> PEER_REVIEW : Host edits + resubmits (invites outstanding)
+    REJECTED --> PENDING : Host edits + resubmits
+    APPROVED --> COMPLETED : Management, or host once the date has passed (filing a claim also completes it)
+    PEER_REVIEW --> CANCELLED : Host / Management
+    PENDING --> CANCELLED : Host / Management
+    APPROVED --> CANCELLED : Host / Management (reason mandatory)
+    COMPLETED --> [*]
+    CANCELLED --> [*]
 ```
+
+All transitions are enforced server-side in `portal/api/meetups.py` (`permissions()` returns the allowed actions for the signed-in user and the UI renders only those). Every transition writes a row to `meetup_activity`.
 
 ### 4.3 Phase-by-Phase Process Explanation
 
@@ -243,9 +238,9 @@ stateDiagram-v2
 2. **Mandatory Details**:
    - Meetup Title & Comprehensive Agenda / Objectives.
    - Category: *Study Jam & Exam Prep, Hackathon, Project Collaboration, Peer Networking, Alumni Talk, Cultural/Sports*.
-   - Event Mode: *In-Person (Physical Venue), Hybrid (Venue + Live Stream), Virtual (Google Meet / Zoom)*.
+   - All meetups are **offline / in person**; a physical venue address is mandatory.
    - Date, Start Time, and End Time.
-   - Exact Venue address or virtual meeting URL.
+   - Exact venue address.
    - Target student capacity and estimated budget (if any).
 3. **Dynamic Regional Peer Discovery**:
    - The system automatically detects the proposer’s assigned Region.
@@ -254,7 +249,7 @@ stateDiagram-v2
      - House Tag (colored according to the house palette).
      - Selection checkboxes and a "Select All in Region" shortcut.
 4. **Submission**:
-   - The proposal is saved with status `PENDING`.
+   - The proposal is saved as `PEER_REVIEW` if co-hosts were invited, otherwise `PENDING`.
    - Invitation records are created with status `INVITED`.
    - System notifications are dispatched to Management and the invited peers.
 
@@ -282,167 +277,85 @@ stateDiagram-v2
 ## 5. Data Architecture & Storage Specification
 
 ### 5.1 Storage Engine & Location
-* **Location**: Local SQLite database at:
-  📁 `data/iitmbs_meets.db`
-* **Driver**: Python's native standard library module (`sqlite3`).
-* **Attributes**:
-  * **Zero External Dependencies**: Runs out-of-the-box on macOS, Linux, and Windows.
-  * **ACID Compliant**: Transactional integrity across multi-step proposal and invitation inserts.
-  * **Persistent**: All data survives server restarts, reloads, and browser cache clears.
-  * **Production Ready for Migration**: Clean relational schema easily exported to PostgreSQL, Supabase, or SQLite on cloud containers.
+* **Database**: SQLite at `data/iitmbs_meets.db` (not committed — created and seeded on first run).
+* **Schema**: `portal/schema.sql`. `portal/db.py` stores `SCHEMA_VERSION` in `PRAGMA user_version`; an outdated database is rebuilt from seed on startup. Bump the version whenever the schema changes.
+* **Uploads**: claim receipts are saved under `data/uploads/` and referenced from `claim_files`.
+* **Conventions**: audit timestamps are UTC `YYYY-MM-DD HH:MM:SS`; event dates are `YYYY-MM-DD`, times `HH:MM` (24h); money is whole rupees (`INTEGER`).
 
 ### 5.2 Entity Relationship Diagram
 
 ```mermaid
 erDiagram
-    HOUSES ||--o{ USERS : assigns
-    REGIONS ||--o{ USERS : assigns
-    USERS ||--o{ MEETUP_PROPOSALS : proposes
-    HOUSES ||--o{ MEETUP_PROPOSALS : categorizes
-    REGIONS ||--o{ MEETUP_PROPOSALS : locates
-    MEETUP_PROPOSALS ||--o{ MEETUP_INVITATIONS : contains
+    HOUSES ||--o{ USERS : "house_id"
+    REGIONS ||--o{ USERS : "region_id"
+    USERS ||--o{ MEETUPS : proposes
+    MEETUPS ||--o{ MEETUP_INVITATIONS : "co-host invites"
     USERS ||--o{ MEETUP_INVITATIONS : receives
+    MEETUPS ||--o{ MEETUP_ACTIVITY : "audit + comments"
+    MEETUPS ||--o| CLAIMS : "one claim"
+    CLAIMS ||--o{ CLAIM_FILES : receipts
     USERS ||--o{ NOTIFICATIONS : receives
-    MEETUP_PROPOSALS ||--o{ NOTIFICATIONS : references
 
-    HOUSES {
-        int id PK
-        string name
-        string motto
-        string color
-    }
-
-    REGIONS {
-        int id PK
-        string name
-        string states
-        string short_code
-    }
-
-    USERS {
-        string id PK
-        string name
-        string email UK
-        string role "MANAGEMENT | UHC | LHC"
-        int house_id FK
-        int region_id FK
-        string roll_number
-        string avatar_url
-    }
-
-    MEETUP_PROPOSALS {
-        int id PK
-        string title
-        string description
-        string category
-        string proposer_id FK
-        int house_id FK
-        int region_id FK
-        string proposed_date
-        string start_time
-        string end_time
-        string mode "IN_PERSON | VIRTUAL | HYBRID"
-        string venue
-        int expected_attendees
-        string estimated_budget
-        string status "PENDING | APPROVED | REJECTED"
-        string management_remarks
-        string reviewed_by FK
-        timestamp reviewed_at
-    }
-
-    MEETUP_INVITATIONS {
-        int id PK
-        int meetup_id FK
-        string invitee_id FK
-        string status "INVITED | ACCEPTED | DECLINED"
-        string response_note
-        timestamp responded_at
-    }
-
-    NOTIFICATIONS {
-        int id PK
-        string user_id FK
-        string title
-        string message
-        string type
-        int related_meetup_id FK
-        int is_read
-        timestamp created_at
-    }
+    HOUSES { int id PK; text slug UK; text name; text motto; text color }
+    REGIONS { int id PK; text code UK; text name; text states }
+    USERS { text id PK; text name; text email UK; text role "MANAGEMENT|UHC|LHC"; text title; int house_id FK; int region_id FK; text roll_number UK }
+    MEETUPS { int id PK; text title; text description; text category; text proposer_id FK; int house_id FK; int region_id FK; text event_date; text start_time; text end_time; text venue "required, offline only"; int expected_attendees; int budget_requested; text budget_breakdown; text status; text review_comments; text reviewed_by FK; text reviewed_at; text submitted_at; text completed_at }
+    MEETUP_INVITATIONS { int id PK; int meetup_id FK; text invitee_id FK; text status "INVITED|ACCEPTED|DECLINED"; text response_note; text responded_at }
+    MEETUP_ACTIVITY { int id PK; int meetup_id FK; text actor_id FK; text action; text note; text created_at }
+    CLAIMS { int id PK; int meetup_id FK_UK; text claimant_id FK; int amount_claimed; int amount_approved; int actual_attendance; text attendance_notes; text expense_notes; text payout_details; text status "PENDING_REVIEW|IN_PROGRESS|APPROVED|REJECTED"; text review_notes }
+    CLAIM_FILES { int id PK; int claim_id FK; text original_name; text stored_name; int size_bytes }
+    NOTIFICATIONS { int id PK; text user_id FK; text title; text body; int meetup_id FK; int is_read }
 ```
+
+Database-level guarantees (CHECK constraints): role shape (LHC = house + region, UHC = house only, Management = neither), `end_time > start_time`, a REJECTED meetup or claim must carry feedback text, one claim per meetup. The same-region invite rule needs a cross-row lookup, so it is enforced in `_sync_invitations()`.
 
 ---
 
 ## 6. REST API Specifications
 
-The Flask backend exposes the following RESTful endpoints:
+Identity comes from a signed session cookie — **no endpoint accepts a user id for the acting user**. Errors are `{"error": "message"}` with a 4xx status.
 
-### Bootstrap & Metadata
-* `GET /api/bootstrap`: Returns all 12 houses, 10 regions, curated demo test users, and global counts.
-* `POST /api/reset-demo`: Resets the database back to clean seed conditions with 120 LHCs, 36 UHCs, and sample meetups.
+### Session & reference data
+* `GET /api/session` → `{user}` (or `null`). `POST /api/session {user_id}` signs in (demo picker; replace with Google OAuth). `DELETE /api/session` signs out.
+* `GET /api/directory?q=` → roster search + featured demo accounts for the sign-in screen.
+* `GET /api/meta` → houses, regions, categories, today.
 
-### User Management
-* `GET /api/users`: Queries users with optional query parameters:
-  - `?role=LHC`
-  - `?region_id=4`
-  - `?house_id=8`
-  - `?exclude_id=lhc-8-4`
-* `GET /api/user/<user_id>`: Returns full profile including House name, color, and Region information.
+### Dashboards
+* `GET /api/home` → role-specific payload (Management: decision queue, claims, upcoming, to-close; UHC: house counts, region coverage, in review; LHC: invites, to-dos, in-flight, upcoming, region).
+* `GET /api/calendar?start=&end=&scope=all|region|house|mine` → meetups in review, approved or held within the date range (home calendar).
+* `GET /api/badges` → nav counts. `GET /api/stats?house_id=&region_id=` → totals, by_house, by_region, house×region matrix, by_category, months.
 
-### Meetup Lifecycle
-* `GET /api/meetups`: Fetches meetups with filtering:
-  - `?user_id=<id>`: Attaches personalized invitation status.
-  - `?status=PENDING|APPROVED|REJECTED|ALL`
-  - `?region_id=<id>`
-  - `?house_id=<id>`
-* `POST /api/meetups`: Creates a new proposal.
-  - Payload: `{ proposer_id, title, description, category, proposed_date, start_time, end_time, mode, venue, expected_attendees, estimated_budget, invitee_ids }`.
-* `POST /api/meetups/<id>/review`: Performs Management review.
-  - Payload: `{ reviewer_id, action: "APPROVE" | "REJECT", remarks: string }`.
+### Meetups
+* `GET /api/meetups` — filters: `status` (comma list), `house_id`, `region_id`, `category`, `mine=1`, `invited=1`, `when=upcoming|past`, `q`, `sort=date_asc|submitted`. Results are limited to what the user may see.
+* `GET /api/meetups/<id>` → `{meetup, invitations, my_invitation, activity, claim, can}`.
+* `GET /api/peers` (LHC) → LHCs in the caller's region.
+* `POST /api/meetups` (LHC) and `PUT /api/meetups/<id>` (host, DRAFT/REJECTED): `{title, description, category, event_date, start_time, end_time, venue, expected_attendees, budget_requested, budget_breakdown, invitee_ids[], submit}`.
+* `DELETE /api/meetups/<id>` (host, DRAFT).
+* `POST /api/meetups/<id>/submit | send-to-management | withdraw` (host).
+* `POST /api/meetups/<id>/review {decision: APPROVE|REJECT, comments}` (Management; comments required to reject).
+* `POST /api/meetups/<id>/complete` · `POST /api/meetups/<id>/cancel {reason}` · `POST /api/meetups/<id>/comments {body}`.
+* `POST /api/invitations/<meetup_id>/respond {decision: ACCEPT|DECLINE, note}` (invitee).
 
-### Regional Invitations & Notifications
-* `POST /api/invitations/<id>/respond`: Records peer LHC decision.
-  - Payload: `{ user_id, action: "ACCEPT" | "DECLINE", note: string }`.
-* `GET /api/notifications?user_id=<id>`: Fetches user notifications.
-* `POST /api/notifications/mark-read`: Marks notifications as read.
+### Claims
+* `GET /api/claims?status=` (Management: all · UHC: own house · LHC: own). `GET /api/claims/<id>`.
+* `POST /api/meetups/<id>/claim` — multipart: `amount_claimed, actual_attendance, attendance_notes, expense_notes, payout_details, receipts[]` (host, after the event).
+* `POST /api/claims/<id>/review {decision: APPROVE|IN_PROGRESS|REJECT, amount_approved, notes}` (Management).
+* `GET /api/claims/<id>/files/<file_id>` — download a receipt.
+
+### Notifications & admin
+* `GET /api/notifications` · `POST /api/notifications/read`.
+* `POST /api/admin/reset {confirm: "RESET"}` (Management) — rebuild demo data.
 
 ---
 
-## 7. User Interface Design System
+## 7. User Interface
 
-The application strictly reflects the visual identity of the **IIT Madras Student Activities Portal**:
-
-```
-┌───────────────────────────────────────────────────────────────────────────────────────┐
-│  COLOR PALETTE TOKENS                                                                 │
-│  Base Canvas Background:  #16141D (Deep Aubergine Charcoal)                          │
-│  Elevated Surface Card:   #201C29 / #282333 (Subtle Slate Tint)                      │
-│  Borders & Dividers:      #362F43 / rgba(255, 255, 255, 0.08)                        │
-│  Primary Active Accent:   #E05D2D (Warm Terracotta Orange Active Highlight)          │
-│  Institutional Crimson:   #800000 (IIT Madras Maroon Accent)                         │
-│  Pending Status Badge:    #F59E0B (Amber Gold Glow)                                  │
-│  Approved Status Badge:   #10B981 (Emerald Green Glow)                               │
-│  Rejected Status Badge:   #EF4444 (Crimson Red Glow)                                 │
-└───────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Visual Components
-1. **Persistent Collapsible Sidebar**:
-   - Official circular IIT Madras emblem & "Student Activities" branding.
-   - Active view indicated by an orange solid pill background (`#E05D2D`).
-   - Preferences controls for sidebar position (Left / Right) and expansion mode (Persistent / Hover).
-2. **Top Navigation & Role Switcher**:
-   - Breadcrumb navigation (`Student Activities / Home`).
-   - One-click **Test Role Switcher** buttons to test all roles immediately:
-     - `👑 Mgmt`: Dean / Activities Administrator (Dr. Andrew Dean).
-     - `🏛️ UHC`: Upper House Council Lead (Vikram - Sundarbans UHC Lead).
-     - `✍️ LHC Proposer`: Proposing coordinator (Rahul Verma - Sundarbans House, Mumbai Region).
-     - `👥 Regional Peer`: Peer coordinator (Sneha Roy - Corbett House, Mumbai Region).
-3. **Interactive Modals**:
-   - Propose Meetup Wizard with dynamic regional peer checkboxes.
-   - Management Decision modal with approve/reject actions and feedback textarea.
-   - Comprehensive meetup detail modal with invitation response roster.
+* **Code layout**: `templates/index.html` (shell + icon sprite) · `static/css/style.css` (tokens, components, responsive tiers) · `static/js/app.js` (session, hash router, nav, notifications) · `static/js/ui.js` (escaping `html` template tag, formatters, components, dialog/popover/toast) · `static/js/views/*.js` (one module per screen).
+* **Routes**: `#/home`, `#/meetups`, `#/meetups/:id`, `#/meetups/:id/edit`, `#/new`, `#/invites` (LHC), `#/claims`, `#/insights`, `#/settings`.
+* **Appearance**: themes `light` (warm paper), `dark` (soft graphite, default), `black` (true black) and Auto; seven accent palettes; three typefaces. Chosen in Settings or via ⌘K and stored per device. Status is a glyph whose ring fills as a meetup progresses (draft → with co-hosts → awaiting decision → approved → held).
+* **Home calendar**: month grid with approved (solid), in-review (outlined) and held (muted) meetups, plus a day agenda. Scopes: Management = all; UHC = own house / all; LHC = own region / mine / everywhere.
+* **Command palette**: ⌘K / Ctrl+K (search button on phones) — navigate, create, switch theme/accent, search meetups.
+* **Layout tiers**: ≥1180px full sidebar · 768–1179px icon rail · <768px top bar + off-canvas drawer + bottom tab bar, dialogs become bottom sheets. No page-level horizontal scroll at any width (wide tables like the heatmap scroll inside their card).
 
 ---
 
@@ -450,34 +363,13 @@ The application strictly reflects the visual identity of the **IIT Madras Studen
 
 ### 8.1 Starting the Application
 ```bash
-# Navigate to the workspace
-cd /Users/itz_ats_sama/iitmbs-meets
-
-# Activate virtual environment and start server
 .venv/bin/python app.py
 ```
-Open **`http://localhost:5050`** in any web browser.
+Open **`http://localhost:5050`**.
 
 ### 8.2 Standard Test Walkthrough
-
-1. **Step 1: Test LHC Proposer Flow**:
-   - In the topbar, ensure **`✍️ LHC Proposer`** (Rahul Verma) is active.
-   - Click **"Propose Meetup"**.
-   - Input title, date, venue, and description.
-   - Notice that the peer selector dynamically displays only LHCs in **Region 4 (West)**.
-   - Select **Sneha Roy** and **Amit Kulkarni**, then submit.
-
-2. **Step 2: Test Regional Peer Flow**:
-   - Click **`👥 Regional Peer`** (Sneha Roy) in the topbar.
-   - Open the **"Peer Invites"** tab in the sidebar.
-   - Observe the pending invite card. Click **"✓ Accept Invitation"**.
-
-3. **Step 3: Test Management Review Flow**:
-   - Click **`👑 Mgmt`** (Dr. Andrew) in the topbar.
-   - Open the **"Management Queue"** tab.
-   - Click **"Review & Decide"**.
-   - Enter feedback remarks and click **"✓ Approve Proposal"** (or **"✕ Reject Proposal"**).
-
-4. **Step 4: Verify Notifications**:
-   - Switch back to **`✍️ LHC Proposer`**.
-   - Click the 🔔 bell icon in the top right: View the real-time approval notification.
+1. **Sign in as Rahul Verma** (LHC, Sundarbans · Mumbai). *New proposal* → fill the form; the co-host list shows only Mumbai LHCs. Invite Sneha Roy and submit → status *With co-hosts*.
+2. **Switch account → Sneha Roy**. Home shows the invite; *Accept*. When the last invitee replies the proposal moves to *Awaiting decision* automatically (or Rahul can *Send to Management now*).
+3. **Switch account → Dr. Meera Krishnan** (Management). Home → *Decision queue* → open it → *Approve* (or *Reject*, which requires feedback).
+4. After the date (or via Management's *Mark as held*), Rahul files a **reimbursement claim** with receipts from the meetup page; Management verifies it under *Reimbursements*.
+5. **Vikram Rao** (UHC, Sundarbans) sees house activity, region coverage of his LHCs, and can comment on Sundarbans meetups.

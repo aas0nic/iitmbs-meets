@@ -10,7 +10,8 @@ Styled faithfully in alignment with the official **IIT Madras Student Activities
 
 For the full architectural breakdown, role access control matrices, Mermaid lifecycle diagrams, SQLite schemas, and REST API specifications, please refer to:
 
-👉 **[WORKFLOW.md](WORKFLOW.md)**
+👉 **[WORKFLOW.md](WORKFLOW.md)** — Architectural specification, RBAC matrix, database schema, and API contracts.  
+👉 **[CLAUDE.md](CLAUDE.md)** — Direct instructions, constraints, and development guidelines for Claude AI.
 
 ---
 
@@ -30,7 +31,8 @@ All data is stored in a persistent local SQLite database file at:
 
 - Seeded with **12 Houses**, **10 Regions**, **120 LHCs**, **36 UHCs**, and **Management**.
 - Fully ACID-compliant and persistent across server reboots.
-- One-click reset back to seed defaults available in the **Preferences** tab.
+- Schema in `portal/schema.sql`; rebuilt automatically when the schema version changes.
+- Management can reset to seed data from **Settings**.
 
 ---
 
@@ -57,11 +59,11 @@ Open **`http://localhost:5050`** in your browser.
 
 ---
 
-## 🧪 Testing the Workflows (One-Click Role Switcher)
+## 🧪 Trying the Workflows
 
-Use the topbar shortcut buttons to test all roles immediately:
+Sign-in is a demo account picker until Google sign-in is connected:
 
-1. **`✍️ LHC Proposer` (Rahul Verma)**: Propose a meetup and invite fellow regional peers from Mumbai Region (Sundarbans House).
-2. **`👥 Regional Peer` (Sneha Roy)**: View the invitation under **Peer Invites** and click **Accept** (Corbett House, Mumbai Region).
-3. **`👑 Mgmt` (Dr. Andrew)**: View the proposal under **Meetup Hub** / **Pending Review** and click **Review & Decide** &rarr; **Approve**.
-4. **🔔 Notification Tray**: View real-time notifications dispatched to all participants.
+1. **Rahul Verma** (LHC · Sundarbans · Mumbai) — propose a meetup and invite Mumbai LHCs as co-hosts.
+2. **Sneha Roy** (LHC · Corbett · Mumbai) — accept the co-host invite from Home.
+3. **Dr. Meera Krishnan** (Management) — approve or reject from the decision queue; verify claims under Reimbursements.
+4. **Vikram Rao** (UHC · Sundarbans) — follow house activity and region coverage, comment on proposals.
